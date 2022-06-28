@@ -2,6 +2,7 @@
 
 from .clightning import CLightningWallet
 from .eclair import EclairWallet
+from .cliche import ClicheWallet
 from .fake import FakeWallet
 from .lnbits import LNbitsWallet
 from .lndrest import LndRestWallet

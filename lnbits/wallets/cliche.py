@@ -22,7 +22,7 @@ from .base import (
 )
 
 
-class EclairError(Exception):
+class ClicheWallet(Exception):
     pass
 
 
@@ -30,7 +30,7 @@ class UnknownError(Exception):
     pass
 
 
-class EclairWallet(Wallet):
+class ClicheWallet(Wallet):
     def __init__(self):
         url = getenv("CLICHE_URL")
         self.url = url[:-1] if url.endswith("/") else url
@@ -40,7 +40,7 @@ class EclairWallet(Wallet):
     async def status(self) -> StatusResponse:
         async with httpx.AsyncClient() as client:
             r = await client.post(
-                f"{self.url}/usablebalances", headers=self.auth, timeout=40
+                f"{self.url}/usablebalances", timeout=40
             )
         try:
             data = r.json()
@@ -69,7 +69,7 @@ class EclairWallet(Wallet):
 
         async with httpx.AsyncClient() as client:
             r = await client.post(
-                f"{self.url}/createinvoice", headers=self.auth, data=data, timeout=40
+                f"{self.url}/createinvoice", data=data, timeout=40
             )
 
         if r.is_error:
@@ -89,7 +89,6 @@ class EclairWallet(Wallet):
         async with httpx.AsyncClient() as client:
             r = await client.post(
                 f"{self.url}/payinvoice",
-                headers=self.auth,
                 data={"invoice": bolt11, "blocking": True},
                 timeout=40,
             )
@@ -172,8 +171,7 @@ class EclairWallet(Wallet):
 
         try:
             async with connect(
-                self.ws_url,
-                extra_headers=[("Authorization", self.auth["Authorization"])],
+                self.ws_url
             ) as ws:
                 while True:
                     message = await ws.recv()

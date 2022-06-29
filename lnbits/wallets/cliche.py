@@ -21,6 +21,30 @@ from .base import (
     Wallet,
 )
 
+import websocket
+import _thread
+import time
+import rel
+
+def on_message(ws, message):
+    print(message)
+
+def on_error(ws, error):
+    print(error)
+
+def on_close(ws, close_status_code, close_msg):
+    print("### closed ###")
+
+def on_open(ws):
+    print("Opened connection")
+
+if __name__ == "__main__":
+#    websocket.enableTrace(True)
+    
+
+
+
+
 
 class ClicheWallet(Exception):
     pass
@@ -36,14 +60,20 @@ class ClicheWallet(Wallet):
         self.url = url[:-1] if url.endswith("/") else url
 
         self.ws_url = f"ws://{urllib.parse.urlsplit(self.url).netloc}"
+        ws = websocket.WebSocketApp(self.ws_url,
+                              on_open=on_open,
+                              on_message=on_message,
+                              on_error=on_error,
+                              on_close=on_close)
+        ws.run_forever(dispatcher=rel)
+        rel.signal(2, rel.abort)
+        rel.dispatch()
 
     async def status(self) -> StatusResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/usablebalances", timeout=40
-            )
+        ws.send("get-info")
+        result =  ws.recv()
         try:
-            data = r.json()
+            data = result.json()
         except:
             return StatusResponse(
                 f"Failed to connect to {self.url}, got: '{r.text[:200]}...'", 0
@@ -52,7 +82,7 @@ class ClicheWallet(Wallet):
         if r.is_error:
             return StatusResponse(data["error"], 0)
 
-        return StatusResponse(None, data[0]["canSend"] * 1000)
+        return StatusResponse(None, 1 * 1000)
 
     async def create_invoice(
         self,
@@ -60,109 +90,87 @@ class ClicheWallet(Wallet):
         memo: Optional[str] = None,
         description_hash: Optional[bytes] = None,
     ) -> InvoiceResponse:
+        
 
         data: Dict = {"amountMsat": amount * 1000}
+        description = ""
         if description_hash:
-            data["description_hash"] = description_hash.hex()
+            description = description_hash.hex()
         else:
-            data["description"] = memo or ""
-
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/createinvoice", data=data, timeout=40
-            )
-
-        if r.is_error:
+            description = memo or ""
+        ws.send(f"create-invoice --msatoshi { amount * 1000 } --description { description }")
+        result =  ws.recv()
+        if result.is_error:
             try:
-                data = r.json()
+                data = result.json()
                 error_message = data["error"]
             except:
-                error_message = r.text
+                error_message = result.text
                 pass
 
             return InvoiceResponse(False, None, None, error_message)
 
-        data = r.json()
+        data = result.json()
         return InvoiceResponse(True, data["paymentHash"], data["serialized"], None)
 
     async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/payinvoice",
-                data={"invoice": bolt11, "blocking": True},
-                timeout=40,
-            )
+        ws.send(f"pay-invoice --invoice { bolt11 }")
+        result =  ws.recv()
 
-        if "error" in r.json():
+        if "error" in result.json():
             try:
-                data = r.json()
+                data = result.json()
                 error_message = data["error"]
             except:
-                error_message = r.text
+                error_message = result.text
                 pass
             return PaymentResponse(False, None, 0, None, error_message)
 
-        data = r.json()
+        data = result.json()
 
-        checking_id = data["paymentHash"]
-        preimage = data["paymentPreimage"]
+        checking_id = data[1]["params"]["payment_hash"]
+        preimage = data[1]["params"]["preimage"]
 
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/getsentinfo",
-                headers=self.auth,
-                data={"paymentHash": checking_id},
-                timeout=40,
-            )
+        ws.send(f"check-payment --hash { data.payment_hash }")
+        result =  ws.recv()
 
-        if "error" in r.json():
+        if "error" in result.json():
             try:
-                data = r.json()
+                data = result.json()
                 error_message = data["error"]
             except:
-                error_message = r.text
+                error_message = result.text
                 pass
             return PaymentResponse(
                 True, checking_id, 0, preimage, error_message
             )  ## ?? is this ok ??
 
-        data = r.json()
+        data = result.json()
         fees = [i["status"] for i in data]
         fee_msat = sum([i["feesPaid"] for i in fees])
 
         return PaymentResponse(True, checking_id, fee_msat, preimage, None)
 
     async def get_invoice_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/getreceivedinfo",
-                headers=self.auth,
-                data={"paymentHash": checking_id},
-            )
-        data = r.json()
+        ws.send(f"check-payment --hash { checking_id }")
+        result =  ws.recv()
 
-        if r.is_error or "error" in data:
+        if result.is_error or "error" in data:
             return PaymentStatus(None)
 
-        if data["status"]["type"] != "received":
+        if data["method"] != "payment_received":
             return PaymentStatus(False)
 
         return PaymentStatus(True)
 
     async def get_payment_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                url=f"{self.url}/getsentinfo",
-                headers=self.auth,
-                data={"paymentHash": checking_id},
-            )
+        ws.send(f"check-payment --hash { checking_id }")
+        result =  ws.recv()
 
-        data = r.json()[0]
-
-        if r.is_error:
+        if result.is_error:
             return PaymentStatus(None)
 
-        if data["status"]["type"] != "sent":
+        if data["result"]["sent"] != True:
             return PaymentStatus(False)
 
         return PaymentStatus(True)
@@ -177,8 +185,8 @@ class ClicheWallet(Wallet):
                     message = await ws.recv()
                     message = json.loads(message)
 
-                    if message and message["type"] == "payment-received":
-                        yield message["paymentHash"]
+                    if message and message["payment_received"] or message["payment_succeeded"] or message["payment_failed"]:
+                        yield message["payment_hash"]
 
         except (
             OSError,
@@ -189,5 +197,5 @@ class ClicheWallet(Wallet):
             print("OSE", ose)
             pass
 
-            print("lost connection to eclair's websocket, retrying in 5 seconds")
+            print("lost connection to Cliche's websocket, retrying in 5 seconds")
             await asyncio.sleep(5)

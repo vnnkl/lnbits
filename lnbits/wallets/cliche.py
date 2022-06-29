@@ -40,11 +40,14 @@ class ClicheWallet(Wallet):
         self.url = url[:-1] if url.endswith("/") else url
 
         self.ws_url = f"ws://{urllib.parse.urlsplit(self.url).netloc}:{port}"
-        with serve(echo, f"ws://{self.url}", port):
-            asyncio.Future()  # run forever
         
 
     async def status(self) -> StatusResponse:
+        async def main():
+            async with serve(echo, self.ws_url):
+                await asyncio.Future()  # run forever
+        asyncio.run(await main())
+
         ws.send("get-info")
         result =  ws.recv()
         try:

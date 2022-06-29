@@ -6,7 +6,7 @@ from os import getenv
 from typing import AsyncGenerator, Dict, Optional
 
 import httpx
-from websockets import connect
+from websockets import connect, serve
 from websockets.exceptions import (
     ConnectionClosed,
     ConnectionClosedError,
@@ -21,30 +21,9 @@ from .base import (
     Wallet,
 )
 
-import websocket
-import _thread
-import time
-import rel
-
-def on_message(ws, message):
-    print(message)
-
-def on_error(ws, error):
-    print(error)
-
-def on_close(ws, close_status_code, close_msg):
-    print("### closed ###")
-
-def on_open(ws):
-    print("Opened connection")
-
-if __name__ == "__main__":
-#    websocket.enableTrace(True)
-    
-
-
-
-
+async def echo(websocket):
+    async for message in websocket:
+        await websocket.send(message)
 
 class ClicheWallet(Exception):
     pass
@@ -57,17 +36,13 @@ class UnknownError(Exception):
 class ClicheWallet(Wallet):
     def __init__(self):
         url = getenv("CLICHE_URL")
+        port = getenv("CLICHE_PORT")
         self.url = url[:-1] if url.endswith("/") else url
 
-        self.ws_url = f"ws://{urllib.parse.urlsplit(self.url).netloc}"
-        ws = websocket.WebSocketApp(self.ws_url,
-                              on_open=on_open,
-                              on_message=on_message,
-                              on_error=on_error,
-                              on_close=on_close)
-        ws.run_forever(dispatcher=rel)
-        rel.signal(2, rel.abort)
-        rel.dispatch()
+        self.ws_url = f"ws://{urllib.parse.urlsplit(self.url).netloc}:{port}"
+        with serve(echo, f"ws://{self.url}", port):
+            asyncio.Future()  # run forever
+        
 
     async def status(self) -> StatusResponse:
         ws.send("get-info")

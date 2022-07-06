@@ -16,12 +16,12 @@ from .models import CreateTposData
 
 @tpos_ext.get("/api/v1/tposs", status_code=HTTPStatus.OK)
 async def api_tposs(
-    all_wallets: bool = Query(None), wallet: WalletTypeInfo = Depends(get_key_type)
+    all_wallets: bool = Query(False), wallet: WalletTypeInfo = Depends(get_key_type)
 ):
     wallet_ids = [wallet.wallet.id]
     if all_wallets:
         wallet_ids = (await get_user(wallet.wallet.user)).wallet_ids
-
+    
     return [tpos.dict() for tpos in await get_tposs(wallet_ids)]
 
 
@@ -61,7 +61,7 @@ async def api_tpos_create_invoice(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="TPoS does not exist."
         )
-
+        
     try:
         payment_hash, payment_request = await create_invoice(
             wallet_id=tpos.wallet,

@@ -132,6 +132,7 @@ class OpenNodeWallet(Wallet):
             value = await self.queue.get()
             yield value
 
+    @core_app.get("/opennode/webhook", status_code=HTTPStatus.OK)
     async def webhook_listener(self):
         data = await request.form
         if "status" not in data or data["status"] != "paid":

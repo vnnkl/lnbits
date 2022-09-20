@@ -51,10 +51,26 @@ class CreateReverseSubmarineSwap(BaseModel):
     wallet: str = Query(...)  # type: ignore
     amount: int = Query(...)  # type: ignore
     instant_settlement: bool = Query(...)  # type: ignore
-    # validate on-address, bcrt1 for regtest addresses
-    onchain_address: str = Query(
-        ..., regex="^(bcrt1|bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$"
-    )  # type: ignore
+    onchain_address: str = Query(...)  # type: ignore
+
+
+class AutoReverseSubmarineSwap(BaseModel):
+    id: str
+    wallet: str
+    amount: int
+    threshold: int
+    onchain_address: str
+    instant_settlement: bool
+    time: int
+    status: str
+
+
+class CreateAutoReverseSubmarineSwap(BaseModel):
+    wallet: str = Query(...)  # type: ignore
+    amount: int = Query(...)  # type: ignore
+    threshold: int = Query(...)  # type: ignore
+    instant_settlement: bool = Query(...)  # type: ignore
+    onchain_address: str = Query(...)  # type: ignore
 
 
 class SwapStatus(BaseModel):

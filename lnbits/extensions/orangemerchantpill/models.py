@@ -16,6 +16,8 @@ class CreatePillLinkData(BaseModel):
     min: float = Query(1, ge=0.01)
     max: float = Query(1, ge=0.01)
     currency: str = Query(None)
+    revenue_kickback_promille: int = Query(0, ge=0, le=1000)
+    payback_amount_total: int = Query(0, ge=0)
     comment_chars: int = Query(0, ge=0, lt=800)
     webhook_url: str = Query(None)
     success_text: str = Query(None)

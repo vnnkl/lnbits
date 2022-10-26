@@ -9,6 +9,8 @@ async def m001_initial(db):
             wallet TEXT NOT NULL,
             description TEXT NOT NULL,
             amount INTEGER NOT NULL,
+            revenue_kickback_promille INTEGER NOT NULL,
+            payback_amount_total INTEGER NOT NULL,
             served_meta INTEGER NOT NULL,
             served_pr INTEGER NOT NULL
         );

@@ -5,8 +5,8 @@ from http import HTTPStatus
 from fastapi import Request
 from lnurl import (  # type: ignore
     LnurlErrorResponse,
-    OrangePillActionResponse,
-    OrangePillResponse,
+    LnurlPayActionResponse,
+    LnurlPayResponse,
 )
 from starlette.exceptions import HTTPException
 
@@ -31,7 +31,7 @@ async def api_lnurl_response(request: Request, link_id):
 
     rate = await get_fiat_rate_satoshis(link.currency) if link.currency else 1
 
-    resp = OrangePillResponse(
+    resp = LnurlPayResponse(
         callback=request.url_for("orangepill.api_lnurl_callback", link_id=link.id),
         min_sendable=round(link.min * rate) * 1000,
         max_sendable=round(link.max * rate) * 1000,
@@ -98,10 +98,10 @@ async def api_lnurl_callback(request: Request, link_id):
 
     success_action = link.success_action(payment_hash)
     if success_action:
-        resp = OrangePillActionResponse(
+        resp = LnurlPayActionResponse(
             pr=payment_request, success_action=success_action, routes=[]
         )
     else:
-        resp = OrangePillActionResponse(pr=payment_request, routes=[])
+        resp = LnurlPayActionResponse(pr=payment_request, routes=[])
 
     return resp.dict()

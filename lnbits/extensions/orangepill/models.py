@@ -4,7 +4,7 @@ from typing import Dict, Optional
 from urllib.parse import ParseResult, parse_qs, urlencode, urlparse, urlunparse
 
 from fastapi.param_functions import Query
-from lnurl.types import OrangePillMetadata  # type: ignore
+from lnurl.types import LnurlPayMetadata  # type: ignore
 from pydantic import BaseModel
 from starlette.requests import Request
 
@@ -53,8 +53,8 @@ class PillLink(BaseModel):
         return lnurl_encode(url)
 
     @property
-    def orangepillay_metadata(self) -> OrangePillMetadata:
-        return OrangePillMetadata(json.dumps([["text/plain", self.description]]))
+    def orangepillay_metadata(self) -> LnurlPayMetadata:
+        return LnurlPayMetadata(json.dumps([["text/plain", self.description]]))
 
     def success_action(self, payment_hash: str) -> Optional[Dict]:
         if self.success_url:

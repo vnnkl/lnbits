@@ -1,10 +1,9 @@
 {
-  "name": "LNURLp",
-  "short_description": "Make reusable LNURL pay links",
-  "icon": "receipt",
+  "name": "Orange Pill",
+  "short_description": "Create IOUs called Orange Pills to accelerate adoption",
+  "icon": "medication",
   "contributors": [
     "arcbtc",
-    "eillarra",
-    "fiatjaf"
+    "vnnkl"
   ]
 }

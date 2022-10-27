@@ -32,10 +32,11 @@ async def api_lnurl_response(request: Request, link_id):
     rate = await get_fiat_rate_satoshis(link.currency) if link.currency else 1
 
     resp = LnurlPayResponse(
-        callback=request.url_for("orangepill.api_lnurl_callback", link_id=link.id),
+        callback=request.url_for(
+            "orangepill.api_lnurl_callback", link_id=link.id),
         min_sendable=round(link.min * rate) * 1000,
         max_sendable=round(link.max * rate) * 1000,
-        metadata=link.orangepillay_metadata,
+        metadata=link.lnurlpay_metadata,
     )
     params = resp.dict()
 
@@ -87,7 +88,7 @@ async def api_lnurl_callback(request: Request, link_id):
         wallet_id=link.wallet,
         amount=int(amount_received / 1000),
         memo=link.description,
-        unhashed_description=link.orangepillay_metadata.encode("utf-8"),
+        unhashed_description=link.lnurlpay_metadata.encode("utf-8"),
         extra={
             "tag": "orangepill",
             "link": link.id,

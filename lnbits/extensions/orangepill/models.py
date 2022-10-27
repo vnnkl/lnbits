@@ -53,7 +53,7 @@ class PillLink(BaseModel):
         return lnurl_encode(url)
 
     @property
-    def orangepillay_metadata(self) -> LnurlPayMetadata:
+    def lnurlpay_metadata(self) -> LnurlPayMetadata:
         return LnurlPayMetadata(json.dumps([["text/plain", self.description]]))
 
     def success_action(self, payment_hash: str) -> Optional[Dict]:

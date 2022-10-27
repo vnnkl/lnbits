@@ -76,7 +76,8 @@ async def get_pill_links(wallet_ids: Union[str, List[str]]) -> List[PillLink]:
 async def update_pill_link(link_id: int, **kwargs) -> Optional[PillLink]:
     q = ", ".join([f"{field[0]} = ?" for field in kwargs.items()])
     await db.execute(
-        f"UPDATE orangepill.pill_links SET {q} WHERE id = ?", (*kwargs.values(), link_id)
+        f"UPDATE orangepill.pill_links SET {q} WHERE id = ?", (
+            *kwargs.values(), link_id)
     )
     row = await db.fetchone("SELECT * FROM orangepill.pill_links WHERE id = ?", (link_id,))
     return PillLink.from_row(row) if row else None
@@ -85,7 +86,8 @@ async def update_pill_link(link_id: int, **kwargs) -> Optional[PillLink]:
 async def increment_pill_link(link_id: int, **kwargs) -> Optional[PillLink]:
     q = ", ".join([f"{field[0]} = {field[0]} + ?" for field in kwargs.items()])
     await db.execute(
-        f"UPDATE orangepill.pill_links SET {q} WHERE id = ?", (*kwargs.values(), link_id)
+        f"UPDATE orangepill.pill_links SET {q} WHERE id = ?", (
+            *kwargs.values(), link_id)
     )
     row = await db.fetchone("SELECT * FROM orangepill.pill_links WHERE id = ?", (link_id,))
     return PillLink.from_row(row) if row else None

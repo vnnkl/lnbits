@@ -1,3 +1,4 @@
+from .tasks import wait_for_paid_invoices
 import asyncio
 
 from fastapi import APIRouter
@@ -17,7 +18,8 @@ orangepill_static_files = [
     }
 ]
 
-orangepill_ext: APIRouter = APIRouter(prefix="/orangepill", tags=["orangepill"])
+orangepill_ext: APIRouter = APIRouter(
+    prefix="/orangepill", tags=["orangepill"])
 
 
 def orangepill_renderer():
@@ -25,7 +27,6 @@ def orangepill_renderer():
 
 
 from .lnurl import *  # noqa
-from .tasks import wait_for_paid_invoices
 from .views import *  # noqa
 from .views_api import *  # noqa
 

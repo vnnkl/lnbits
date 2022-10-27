@@ -6,6 +6,18 @@ LNURL is a range of lightning-network standards that allow us to use lightning-n
 
 [**Wallets supporting LNURL**](https://github.com/fiatjaf/awesome-lnurl#wallets)
 
+
+Here is a simple flow chart:
+
+```mermaid
+graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;
+```
+
+
 ## Usage
 
 1. Create an LNURLp (New Pay link)\

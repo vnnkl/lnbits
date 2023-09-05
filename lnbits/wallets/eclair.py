@@ -3,20 +3,13 @@ import base64
 import hashlib
 import json
 import urllib.parse
-from os import getenv
-from typing import AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
 
 import httpx
 from loguru import logger
+from websockets.client import connect
 
-# TODO: https://github.com/lnbits/lnbits-legend/issues/764
-# mypy https://github.com/aaugustin/websockets/issues/940
-from websockets import connect  # type: ignore
-from websockets.exceptions import (
-    ConnectionClosed,
-    ConnectionClosedError,
-    ConnectionClosedOK,
-)
+from lnbits.settings import settings
 
 from .base import (
     InvoiceResponse,
@@ -37,24 +30,30 @@ class UnknownError(Exception):
 
 class EclairWallet(Wallet):
     def __init__(self):
-        url = getenv("ECLAIR_URL")
-        self.url = url[:-1] if url.endswith("/") else url
+        url = settings.eclair_url
+        passw = settings.eclair_pass
+        if not url or not passw:
+            raise Exception("cannot initialize eclair")
 
+        self.url = url[:-1] if url.endswith("/") else url
         self.ws_url = f"ws://{urllib.parse.urlsplit(self.url).netloc}/ws"
 
-        passw = getenv("ECLAIR_PASS")
-        encodedAuth = base64.b64encode(f":{passw}".encode("utf-8"))
+        encodedAuth = base64.b64encode(f":{passw}".encode())
         auth = str(encodedAuth, "utf-8")
         self.auth = {"Authorization": f"Basic {auth}"}
+        self.client = httpx.AsyncClient(base_url=self.url, headers=self.auth)
+
+    async def cleanup(self):
+        try:
+            await self.client.aclose()
+        except RuntimeError as e:
+            logger.warning(f"Error closing wallet connection: {e}")
 
     async def status(self) -> StatusResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/globalbalance", headers=self.auth, timeout=5
-            )
+        r = await self.client.post("/globalbalance", timeout=5)
         try:
             data = r.json()
-        except:
+        except Exception:
             return StatusResponse(
                 f"Failed to connect to {self.url}, got: '{r.text[:200]}...'", 0
             )
@@ -72,28 +71,30 @@ class EclairWallet(Wallet):
         memo: Optional[str] = None,
         description_hash: Optional[bytes] = None,
         unhashed_description: Optional[bytes] = None,
+        **kwargs,
     ) -> InvoiceResponse:
+        data: Dict[str, Any] = {
+            "amountMsat": amount * 1000,
+        }
+        if kwargs.get("expiry"):
+            data["expireIn"] = kwargs["expiry"]
 
-        data: Dict = {"amountMsat": amount * 1000}
+        # Either 'description' (string) or 'descriptionHash' must be supplied
         if description_hash:
-            data["description_hash"] = description_hash.hex()
+            data["descriptionHash"] = description_hash.hex()
         elif unhashed_description:
-            data["description_hash"] = hashlib.sha256(unhashed_description).hexdigest()
+            data["descriptionHash"] = hashlib.sha256(unhashed_description).hexdigest()
         else:
-            data["description"] = memo or ""
+            data["description"] = memo
 
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/createinvoice", headers=self.auth, data=data, timeout=40
-            )
+        r = await self.client.post("/createinvoice", data=data, timeout=40)
 
         if r.is_error:
             try:
                 data = r.json()
                 error_message = data["error"]
-            except:
+            except Exception:
                 error_message = r.text
-                pass
 
             return InvoiceResponse(False, None, None, error_message)
 
@@ -101,21 +102,18 @@ class EclairWallet(Wallet):
         return InvoiceResponse(True, data["paymentHash"], data["serialized"], None)
 
     async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/payinvoice",
-                headers=self.auth,
-                data={"invoice": bolt11, "blocking": True},
-                timeout=None,
-            )
+        r = await self.client.post(
+            "/payinvoice",
+            data={"invoice": bolt11, "blocking": True},
+            timeout=None,
+        )
 
         if "error" in r.json():
             try:
                 data = r.json()
                 error_message = data["error"]
-            except:
+            except Exception:
                 error_message = r.text
-                pass
             return PaymentResponse(False, None, None, None, error_message)
 
         data = r.json()
@@ -128,21 +126,18 @@ class EclairWallet(Wallet):
 
         # We do all this again to get the fee:
 
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/getsentinfo",
-                headers=self.auth,
-                data={"paymentHash": checking_id},
-                timeout=40,
-            )
+        r = await self.client.post(
+            "/getsentinfo",
+            data={"paymentHash": checking_id},
+            timeout=40,
+        )
 
         if "error" in r.json():
             try:
                 data = r.json()
                 error_message = data["error"]
-            except:
+            except Exception:
                 error_message = r.text
-                pass
             return PaymentResponse(None, checking_id, None, preimage, error_message)
 
         statuses = {
@@ -152,6 +147,7 @@ class EclairWallet(Wallet):
         }
 
         data = r.json()[-1]
+        fee_msat = 0
         if data["status"]["type"] == "sent":
             fee_msat = -data["status"]["feesPaid"]
             preimage = data["status"]["paymentPreimage"]
@@ -161,52 +157,57 @@ class EclairWallet(Wallet):
         )
 
     async def get_invoice_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/getreceivedinfo",
-                headers=self.auth,
+        try:
+            r = await self.client.post(
+                "/getreceivedinfo",
                 data={"paymentHash": checking_id},
             )
-        data = r.json()
 
-        if r.is_error or "error" in data or data.get("status") is None:
+            r.raise_for_status()
+            data = r.json()
+
+            if r.is_error or "error" in data or data.get("status") is None:
+                raise Exception("error in eclair response")
+
+            statuses = {
+                "received": True,
+                "expired": False,
+                "pending": None,
+            }
+            return PaymentStatus(statuses.get(data["status"]["type"]))
+        except Exception:
             return PaymentStatus(None)
 
-        statuses = {
-            "received": True,
-            "expired": False,
-            "pending": None,
-        }
-        return PaymentStatus(statuses.get(data["status"]["type"]))
-
     async def get_payment_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.url}/getsentinfo",
-                headers=self.auth,
+        try:
+            r = await self.client.post(
+                "/getsentinfo",
                 data={"paymentHash": checking_id},
                 timeout=40,
             )
 
-        if r.is_error:
+            r.raise_for_status()
+
+            data = r.json()[-1]
+
+            if r.is_error or "error" in data or data.get("status") is None:
+                raise Exception("error in eclair response")
+
+            fee_msat, preimage = None, None
+            if data["status"]["type"] == "sent":
+                fee_msat = -data["status"]["feesPaid"]
+                preimage = data["status"]["paymentPreimage"]
+
+            statuses = {
+                "sent": True,
+                "failed": False,
+                "pending": None,
+            }
+            return PaymentStatus(
+                statuses.get(data["status"]["type"]), fee_msat, preimage
+            )
+        except Exception:
             return PaymentStatus(None)
-
-        data = r.json()[-1]
-
-        if r.is_error or "error" in data or data.get("status") is None:
-            return PaymentStatus(None)
-
-        fee_msat, preimage = None, None
-        if data["status"]["type"] == "sent":
-            fee_msat = -data["status"]["feesPaid"]
-            preimage = data["status"]["paymentPreimage"]
-
-        statuses = {
-            "sent": True,
-            "failed": False,
-            "pending": None,
-        }
-        return PaymentStatus(statuses.get(data["status"]["type"]), fee_msat, preimage)
 
     async def paid_invoices_stream(self) -> AsyncGenerator[str, None]:
         while True:
@@ -217,13 +218,14 @@ class EclairWallet(Wallet):
                 ) as ws:
                     while True:
                         message = await ws.recv()
-                        message = json.loads(message)
+                        message_json = json.loads(message)
 
-                        if message and message["type"] == "payment-received":
-                            yield message["paymentHash"]
+                        if message_json and message_json["type"] == "payment-received":
+                            yield message_json["paymentHash"]
 
             except Exception as exc:
                 logger.error(
-                    f"lost connection to eclair invoices stream: '{exc}', retrying in 5 seconds"
+                    f"lost connection to eclair invoices stream: '{exc}'"
+                    "retrying in 5 seconds"
                 )
                 await asyncio.sleep(5)

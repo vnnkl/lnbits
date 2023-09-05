@@ -34,20 +34,23 @@ class PaymentStatus(NamedTuple):
 
     @property
     def failed(self) -> bool:
-        return self.paid == False
+        return self.paid is False
 
     def __str__(self) -> str:
-        if self.paid == True:
+        if self.paid is True:
             return "settled"
-        elif self.paid == False:
+        elif self.paid is False:
             return "failed"
-        elif self.paid == None:
+        elif self.paid is None:
             return "still pending"
         else:
             return "unknown (should never happen)"
 
 
 class Wallet(ABC):
+    async def cleanup(self):
+        pass
+
     @abstractmethod
     def status(self) -> Coroutine[None, None, StatusResponse]:
         pass
@@ -58,6 +61,7 @@ class Wallet(ABC):
         amount: int,
         memo: Optional[str] = None,
         description_hash: Optional[bytes] = None,
+        **kwargs,
     ) -> Coroutine[None, None, InvoiceResponse]:
         pass
 

@@ -2,11 +2,12 @@ import asyncio
 import hashlib
 import json
 import time
-from os import getenv
 from typing import AsyncGenerator, Dict, Optional
 
 import httpx
 from loguru import logger
+
+from lnbits.settings import settings
 
 from .base import (
     InvoiceResponse,
@@ -19,24 +20,29 @@ from .base import (
 
 class LnTipsWallet(Wallet):
     def __init__(self):
-        endpoint = getenv("LNTIPS_API_ENDPOINT")
-        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
-
+        endpoint = settings.lntips_api_endpoint
         key = (
-            getenv("LNTIPS_API_KEY")
-            or getenv("LNTIPS_ADMIN_KEY")
-            or getenv("LNTIPS_INVOICE_KEY")
+            settings.lntips_api_key
+            or settings.lntips_admin_key
+            or settings.lntips_invoice_key
         )
+        if not endpoint or not key:
+            raise Exception("cannot initialize lntxbod")
+        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
         self.auth = {"Authorization": f"Basic {key}"}
+        self.client = httpx.AsyncClient(base_url=self.endpoint, headers=self.auth)
+
+    async def cleanup(self):
+        try:
+            await self.client.aclose()
+        except RuntimeError as e:
+            logger.warning(f"Error closing wallet connection: {e}")
 
     async def status(self) -> StatusResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"{self.endpoint}/api/v1/balance", headers=self.auth, timeout=40
-            )
+        r = await self.client.get("/api/v1/balance", timeout=40)
         try:
             data = r.json()
-        except:
+        except Exception:
             return StatusResponse(
                 f"Failed to connect to {self.endpoint}, got: '{r.text[:200]}...'", 0
             )
@@ -54,29 +60,24 @@ class LnTipsWallet(Wallet):
         unhashed_description: Optional[bytes] = None,
         **kwargs,
     ) -> InvoiceResponse:
-        data: Dict = {"amount": amount}
+        data: Dict = {"amount": amount, "description_hash": "", "memo": memo or ""}
         if description_hash:
             data["description_hash"] = description_hash.hex()
         elif unhashed_description:
             data["description_hash"] = hashlib.sha256(unhashed_description).hexdigest()
-        else:
-            data["memo"] = memo or ""
 
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.endpoint}/api/v1/createinvoice",
-                headers=self.auth,
-                json=data,
-                timeout=40,
-            )
+        r = await self.client.post(
+            "/api/v1/createinvoice",
+            json=data,
+            timeout=40,
+        )
 
         if r.is_error:
             try:
                 data = r.json()
                 error_message = data["message"]
-            except:
+            except Exception:
                 error_message = r.text
-                pass
 
             return InvoiceResponse(False, None, None, error_message)
 
@@ -86,13 +87,11 @@ class LnTipsWallet(Wallet):
         )
 
     async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.endpoint}/api/v1/payinvoice",
-                headers=self.auth,
-                json={"pay_req": bolt11},
-                timeout=None,
-            )
+        r = await self.client.post(
+            "/api/v1/payinvoice",
+            json={"pay_req": bolt11},
+            timeout=None,
+        )
         if r.is_error:
             return PaymentResponse(False, None, 0, None, r.text)
 
@@ -100,9 +99,8 @@ class LnTipsWallet(Wallet):
             try:
                 data = r.json()
                 error_message = data["error"]
-            except:
+            except Exception:
                 error_message = r.text
-                pass
             return PaymentResponse(False, None, 0, None, error_message)
 
         data = r.json()["details"]
@@ -112,59 +110,61 @@ class LnTipsWallet(Wallet):
         return PaymentResponse(True, checking_id, fee_msat, preimage, None)
 
     async def get_invoice_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.endpoint}/api/v1/invoicestatus/{checking_id}",
-                headers=self.auth,
+        try:
+            r = await self.client.post(
+                f"/api/v1/invoicestatus/{checking_id}",
             )
 
-        if r.is_error or len(r.text) == 0:
-            return PaymentStatus(None)
+            if r.is_error or len(r.text) == 0:
+                raise Exception
 
-        data = r.json()
-        return PaymentStatus(data["paid"])
+            data = r.json()
+            return PaymentStatus(data["paid"])
+        except Exception:
+            return PaymentStatus(None)
 
     async def get_payment_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                url=f"{self.endpoint}/api/v1/paymentstatus/{checking_id}",
-                headers=self.auth,
+        try:
+            r = await self.client.post(
+                url=f"/api/v1/paymentstatus/{checking_id}",
             )
 
-        if r.is_error:
-            return PaymentStatus(None)
-        data = r.json()
+            if r.is_error:
+                raise Exception
+            data = r.json()
 
-        paid_to_status = {False: None, True: True}
-        return PaymentStatus(paid_to_status[data.get("paid")])
+            paid_to_status = {False: None, True: True}
+            return PaymentStatus(paid_to_status[data.get("paid")])
+        except Exception:
+            return PaymentStatus(None)
 
     async def paid_invoices_stream(self) -> AsyncGenerator[str, None]:
         last_connected = None
         while True:
-            url = f"{self.endpoint}/api/v1/invoicestream"
+            url = "/api/v1/invoicestream"
             try:
-                async with httpx.AsyncClient(timeout=None, headers=self.auth) as client:
-                    last_connected = time.time()
-                    async with client.stream("GET", url) as r:
-                        async for line in r.aiter_lines():
-                            try:
-                                prefix = "data: "
-                                if not line.startswith(prefix):
-                                    continue
-                                data = line[len(prefix) :]  # sse parsing
-                                inv = json.loads(data)
-                                if not inv.get("payment_hash"):
-                                    continue
-                            except:
+                last_connected = time.time()
+                async with self.client.stream("GET", url, timeout=None) as r:
+                    async for line in r.aiter_lines():
+                        try:
+                            prefix = "data: "
+                            if not line.startswith(prefix):
                                 continue
-                            yield inv["payment_hash"]
-            except Exception as e:
+                            data = line[len(prefix) :]  # sse parsing
+                            inv = json.loads(data)
+                            if not inv.get("payment_hash"):
+                                continue
+                        except Exception:
+                            continue
+                        yield inv["payment_hash"]
+            except Exception:
                 pass
 
             # do not sleep if the connection was active for more than 10s
             # since the backend is expected to drop the connection after 90s
             if last_connected is None or time.time() - last_connected < 10:
                 logger.error(
-                    f"lost connection to {self.endpoint}/api/v1/invoicestream, retrying in 5 seconds"
+                    f"lost connection to {self.endpoint}/api/v1/invoicestream, retrying"
+                    " in 5 seconds"
                 )
                 await asyncio.sleep(5)

@@ -12,6 +12,30 @@ For developers
 Thanks for contributing :)
 
 
+Run
+=====
+
+This starts the lnbits uvicorn server
+```bash
+poetry run lnbits
+```
+
+This starts the lnbits uvicorn with hot reloading.
+```bash
+make dev
+# or
+poetry run lnbits --reload
+```
+
+Precommit hooks
+=====
+
+This ensures that all commits adhere to the formatting and linting rules.
+
+```bash
+make install-pre-commit-hook
+```
+
 Tests
 =====
 

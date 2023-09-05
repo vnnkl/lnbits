@@ -3,7 +3,7 @@ import time
 import traceback
 import uuid
 from http import HTTPStatus
-from typing import Callable, Dict, List
+from typing import Dict, List, Optional
 
 from fastapi.exceptions import HTTPException
 from loguru import logger
@@ -15,9 +15,29 @@ from lnbits.core.crud import (
     get_standalone_payment,
 )
 from lnbits.core.services import redeem_lnurl_withdraw
-from lnbits.settings import WALLET
+from lnbits.wallets import get_wallet_class
 
 from .core import db
+
+tasks: List[asyncio.Task] = []
+
+
+def create_task(coro):
+    task = asyncio.create_task(coro)
+    tasks.append(task)
+    return task
+
+
+def create_permanent_task(func):
+    return create_task(catch_everything_and_restart(func))
+
+
+def cancel_all_tasks():
+    for task in tasks:
+        try:
+            task.cancel()
+        except Exception as exc:
+            logger.warning(f"error while cancelling task: {str(exc)}")
 
 
 async def catch_everything_and_restart(func):
@@ -42,12 +62,12 @@ class SseListenersDict(dict):
     A dict of sse listeners.
     """
 
-    def __init__(self, name: str = None):
+    def __init__(self, name: Optional[str] = None):
         self.name = name or f"sse_listener_{str(uuid.uuid4())[:8]}"
 
     def __setitem__(self, key, value):
-        assert type(key) == str, f"{key} is not a string"
-        assert type(value) == asyncio.Queue, f"{value} is not an asyncio.Queue"
+        assert isinstance(key, str), f"{key} is not a string"
+        assert isinstance(value, asyncio.Queue), f"{value} is not an asyncio.Queue"
         logger.trace(f"sse: adding listener {key} to {self.name}. len = {len(self)+1}")
         return super().__setitem__(key, value)
 
@@ -65,10 +85,10 @@ class SseListenersDict(dict):
 invoice_listeners: Dict[str, asyncio.Queue] = SseListenersDict("invoice_listeners")
 
 
-def register_invoice_listener(send_chan: asyncio.Queue, name: str = None):
+def register_invoice_listener(send_chan: asyncio.Queue, name: Optional[str] = None):
     """
-    A method intended for extensions (and core/tasks.py) to call when they want to be notified about
-    new invoice payments incoming. Will emit all incoming payments.
+    A method intended for extensions (and core/tasks.py) to call when they want to be
+    notified about new invoice payments incoming. Will emit all incoming payments.
     """
     name_unique = f"{name or 'no_name'}_{str(uuid.uuid4())[:8]}"
     logger.trace(f"sse: registering invoice listener {name_unique}")
@@ -79,6 +99,7 @@ async def webhook_handler():
     """
     Returns the webhook_handler for the selected wallet if present. Used by API.
     """
+    WALLET = get_wallet_class()
     handler = getattr(WALLET, "webhook_listener", None)
     if handler:
         return await handler()
@@ -108,6 +129,7 @@ async def invoice_listener():
 
     Called by the app startup sequence.
     """
+    WALLET = get_wallet_class()
     async for checking_id in WALLET.paid_invoices_stream():
         logger.info("> got a payment notification", checking_id)
         asyncio.create_task(invoice_callback_dispatcher(checking_id))
@@ -124,10 +146,11 @@ async def check_pending_payments():
 
     while True:
         async with db.connect() as conn:
-            logger.debug(
-                f"Task: checking all pending payments (incoming={incoming}, outgoing={outgoing}) of last 15 days"
+            logger.info(
+                f"Task: checking all pending payments (incoming={incoming},"
+                f" outgoing={outgoing}) of last 15 days"
             )
-            start_time: float = time.time()
+            start_time = time.time()
             pending_payments = await get_payments(
                 since=(int(time.time()) - 60 * 60 * 24 * 15),  # 15 days ago
                 complete=False,
@@ -140,16 +163,18 @@ async def check_pending_payments():
             for payment in pending_payments:
                 await payment.check_status(conn=conn)
 
-            logger.debug(
-                f"Task: pending check finished for {len(pending_payments)} payments (took {time.time() - start_time:0.3f} s)"
+            logger.info(
+                f"Task: pending check finished for {len(pending_payments)} payments"
+                f" (took {time.time() - start_time:0.3f} s)"
             )
             # we delete expired invoices once upon the first pending check
             if incoming:
                 logger.debug("Task: deleting all expired invoices")
-                start_time: float = time.time()
+                start_time = time.time()
                 await delete_expired_invoices(conn=conn)
-                logger.debug(
-                    f"Task: expired invoice deletion finished (took {time.time() - start_time:0.3f} s)"
+                logger.info(
+                    "Task: expired invoice deletion finished (took"
+                    f" {time.time() - start_time:0.3f} s)"
                 )
 
         # after the first check we will only check outgoing, not incoming
@@ -162,7 +187,7 @@ async def check_pending_payments():
 async def perform_balance_checks():
     while True:
         for bc in await get_balance_checks():
-            redeem_lnurl_withdraw(bc.wallet, bc.url)
+            await redeem_lnurl_withdraw(bc.wallet, bc.url)
 
         await asyncio.sleep(60 * 60 * 6)  # every 6 hours
 

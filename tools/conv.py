@@ -1,41 +1,35 @@
-import argparse
-import os
-import sqlite3
-from typing import List
-
-import psycopg2
-from environs import Env  # type: ignore
-
-env = Env()
-env.read_env()
-
 # Python script to migrate an LNbits SQLite DB to Postgres
 # All credits to @Fritz446 for the awesome work
 
-
 # pip install psycopg2 OR psycopg2-binary
 
+import argparse
+import os
+import sqlite3
+import sys
+from typing import List
 
-# Change these values as needed
+import psycopg2
 
+from lnbits.settings import settings
 
-sqfolder = env.str("LNBITS_DATA_FOLDER", default=None)
+sqfolder = settings.lnbits_data_folder
+db_url = settings.lnbits_database_url
 
-LNBITS_DATABASE_URL = env.str("LNBITS_DATABASE_URL", default=None)
-if LNBITS_DATABASE_URL is None:
+if db_url is None:
     print("missing LNBITS_DATABASE_URL")
     sys.exit(1)
 else:
     # parse postgres://lnbits:postgres@localhost:5432/lnbits
-    pgdb = LNBITS_DATABASE_URL.split("/")[-1]
-    pguser = LNBITS_DATABASE_URL.split("@")[0].split(":")[-2][2:]
-    pgpswd = LNBITS_DATABASE_URL.split("@")[0].split(":")[-1]
-    pghost = LNBITS_DATABASE_URL.split("@")[1].split(":")[0]
-    pgport = LNBITS_DATABASE_URL.split("@")[1].split(":")[1].split("/")[0]
+    pgdb = db_url.split("/")[-1]
+    pguser = db_url.split("@")[0].split(":")[-2][2:]
+    pgpswd = db_url.split("@")[0].split(":")[-1]
+    pghost = db_url.split("@")[1].split(":")[0]
+    pgport = db_url.split("@")[1].split(":")[1].split("/")[0]
     pgschema = ""
 
 
-def get_sqlite_cursor(sqdb) -> sqlite3:
+def get_sqlite_cursor(sqdb):
     consq = sqlite3.connect(sqdb)
     return consq.cursor()
 
@@ -56,11 +50,14 @@ def check_db_versions(sqdb):
     postgres.execute("SELECT * FROM public.dbversions;")
     dbpost = dict(postgres.fetchall())
 
-    for key in dblite.keys():
-        if key in dblite and key in dbpost and dblite[key] != dbpost[key]:
-            raise Exception(
-                f"sqlite database version ({dblite[key]}) of {key} doesn't match postgres database version {dbpost[key]}"
-            )
+    for key, value in dblite.items():
+        if key in dblite and key in dbpost:
+            version = dbpost[key]
+            if value != version:
+                raise Exception(
+                    f"sqlite database version ({value}) of {key} doesn't match postgres"
+                    f" database version {version}"
+                )
 
     connection = postgres.connection
     postgres.close()
@@ -107,7 +104,7 @@ def insert_to_pg(query, data):
     connection.close()
 
 
-def migrate_core(file: str, exclude_tables: List[str] = []):
+def migrate_core(file: str, exclude_tables: List[str] = None):
     print(f"Migrating core: {file}")
     migrate_db(file, "public", exclude_tables)
     print("✅ Migrated core")
@@ -116,12 +113,15 @@ def migrate_core(file: str, exclude_tables: List[str] = []):
 def migrate_ext(file: str):
     filename = os.path.basename(file)
     schema = filename.replace("ext_", "").split(".")[0]
-    print(f"Migrating ext: {file}.{schema}")
+    print(f"Migrating ext: {schema} from file {file}")
     migrate_db(file, schema)
     print(f"✅ Migrated ext: {schema}")
 
 
-def migrate_db(file: str, schema: str, exclude_tables: List[str] = []):
+def migrate_db(file: str, schema: str, exclude_tables: List[str] = None):
+    # first we check if this file exists:
+    assert os.path.isfile(file), f"{file} does not exist!"
+
     sq = get_sqlite_cursor(file)
     tables = sq.execute(
         """
@@ -132,19 +132,27 @@ def migrate_db(file: str, schema: str, exclude_tables: List[str] = []):
 
     for table in tables:
         tableName = table[0]
-        if tableName in exclude_tables:
+        print(f"Migrating table {tableName}")
+        # hard coded skip for dbversions (already produced during startup)
+        if tableName == "dbversions":
+            continue
+        if exclude_tables and tableName in exclude_tables:
             continue
 
         columns = sq.execute(f"PRAGMA table_info({tableName})").fetchall()
         q = build_insert_query(schema, tableName, columns)
 
         data = sq.execute(f"SELECT * FROM {tableName};").fetchall()
+
+        if len(data) == 0:
+            print(f"🛑 You sneaky dev! Table {tableName} is empty!")
+
         insert_to_pg(q, data)
     sq.close()
 
 
 def build_insert_query(schema, tableName, columns):
-    to_columns = ", ".join(map(lambda column: f'"{column[1]}"', columns))
+    to_columns = ", ".join(map(lambda column: f'"{column[1].lower()}"', columns))
     values = ", ".join(map(lambda column: to_column_type(column[2]), columns))
     return f"""
             INSERT INTO {schema}.{tableName}({to_columns})
@@ -155,7 +163,7 @@ def build_insert_query(schema, tableName, columns):
 def to_column_type(columnType):
     if columnType == "TIMESTAMP":
         return "to_timestamp(%s)"
-    if columnType == "BOOLEAN":
+    if columnType in ["BOOLEAN", "BOOL"]:
         return "%s::boolean"
     return "%s"
 
@@ -167,7 +175,10 @@ parser.add_argument(
     dest="sqlite_path",
     const=True,
     nargs="?",
-    help=f"SQLite DB folder *or* single extension db file to migrate. Default: {sqfolder}",
+    help=(
+        "SQLite DB folder *or* single extension db file to migrate. Default:"
+        f" {sqfolder}"
+    ),
     default=sqfolder,
     type=str,
 )
@@ -215,6 +226,7 @@ if os.path.isdir(args.sqlite_path):
     ]
 else:
     files = [args.sqlite_path]
+
 
 excluded_exts = ["ext_lnurlpos.sqlite3"]
 for file in files:

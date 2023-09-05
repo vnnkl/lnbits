@@ -7,7 +7,6 @@ from Cryptodome.Cipher import AES
 from loguru import logger
 
 BLOCK_SIZE = 16
-import getpass
 
 
 def load_macaroon(macaroon: str) -> str:
@@ -19,21 +18,28 @@ def load_macaroon(macaroon: str) -> str:
     :rtype: str
     """
 
-    # if the macaroon is a file path, load it
+    # if the macaroon is a file path, load it and return hex version
     if macaroon.split(".")[-1] == "macaroon":
         with open(macaroon, "rb") as f:
             macaroon_bytes = f.read()
             return macaroon_bytes.hex()
     else:
+        # if macaroon is a provided string
+        # check if it is hex, if so, return
+        try:
+            bytes.fromhex(macaroon)
+            return macaroon
+        except ValueError:
+            pass
         # convert the bas64 macaroon to hex
         try:
             macaroon = base64.b64decode(macaroon).hex()
-        except:
+        except Exception:
             pass
     return macaroon
 
 
-class AESCipher(object):
+class AESCipher:
     """This class is compatible with crypto-js/aes.js
 
     Encrypt and decrypt in Javascript using:
@@ -53,7 +59,7 @@ class AESCipher(object):
         return data + (chr(length) * length).encode()
 
     def unpad(self, data):
-        return data[: -(data[-1] if type(data[-1]) == int else ord(data[-1]))]
+        return data[: -(data[-1] if isinstance(data[-1], int) else ord(data[-1]))]
 
     @property
     def passphrase(self):

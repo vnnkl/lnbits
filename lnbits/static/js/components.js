@@ -28,7 +28,7 @@ Vue.component('lnbits-wallet-list', {
   },
   template: `
     <q-list v-if="user && user.wallets.length" dense class="lnbits-drawer__q-list">
-      <q-item-label header>Wallets</q-item-label>
+      <q-item-label header v-text="$t('wallets')"></q-item-label>
       <q-item v-for="wallet in wallets" :key="wallet.id"
         clickable
         :active="activeWallet && activeWallet.id === wallet.id"
@@ -56,7 +56,7 @@ Vue.component('lnbits-wallet-list', {
           <q-icon :name="(showForm) ? 'remove' : 'add'" color="grey-5" size="md"></q-icon>
         </q-item-section>
         <q-item-section>
-          <q-item-label lines="1" class="text-caption">Add a wallet</q-item-label>
+          <q-item-label lines="1" class="text-caption" v-text="$t('add_wallet')"></q-item-label>
         </q-item-section>
       </q-item>
       <q-item v-if="showForm">
@@ -111,23 +111,22 @@ Vue.component('lnbits-extension-list', {
     }
   },
   template: `
-    <q-list v-if="user && extensions.length" dense class="lnbits-drawer__q-list">
-      <q-item-label header>Extensions</q-item-label>
+    <q-list v-if="user" dense class="lnbits-drawer__q-list">
+      <q-item-label header v-text="$t('extensions')"></q-item-label>
       <q-item v-for="extension in userExtensions" :key="extension.code"
         clickable
         :active="extension.isActive"
         tag="a" :href="[extension.url, '?usr=', user.id].join('')">
         <q-item-section side>
-          <q-avatar size="md"
-            :color="(extension.isActive)
-              ? (($q.dark.isActive) ? 'primary' : 'primary')
-              : 'grey-5'">
-            <q-icon :name="extension.icon" :size="($q.dark.isActive) ? '21px' : '20px'"
-              :color="($q.dark.isActive) ? 'blue-grey-10' : 'grey-3'"></q-icon>
+          <q-avatar size="md">
+            <q-img
+              :src="extension.tile"
+              style="max-width:20px"
+            ></q-img>
           </q-avatar>
         </q-item-section>
         <q-item-section>
-          <q-item-label lines="1">{{ extension.name }}</q-item-label>
+          <q-item-label lines="1">{{ extension.name }} </q-item-label>
         </q-item-section>
         <q-item-section side v-show="extension.isActive">
           <q-icon name="chevron_right" color="grey-5" size="md"></q-icon>
@@ -138,9 +137,10 @@ Vue.component('lnbits-extension-list', {
           <q-icon name="clear_all" color="grey-5" size="md"></q-icon>
         </q-item-section>
         <q-item-section>
-          <q-item-label lines="1" class="text-caption">Manage extensions</q-item-label>
+          <q-item-label lines="1" class="text-caption" v-text="$t('extensions')"></q-item-label>
         </q-item-section>
       </q-item>
+      <div class="lt-md q-mt-xl q-mb-xl"></div>
     </q-list>
   `,
   computed: {
@@ -177,72 +177,107 @@ Vue.component('lnbits-extension-list', {
   }
 })
 
+Vue.component('lnbits-admin-ui', {
+  data: function () {
+    return {
+      extensions: [],
+      user: null
+    }
+  },
+  template: `
+    <q-list v-if="user && user.admin" dense class="lnbits-drawer__q-list">
+      <q-item-label header>Admin</q-item-label>
+      <q-item clickable tag="a" :href="['/admin?usr=', user.id].join('')">
+        <q-item-section side>
+          <q-icon name="admin_panel_settings" color="grey-5" size="md"></q-icon>
+        </q-item-section>
+        <q-item-section>
+          <q-item-label lines="1" class="text-caption" v-text="$t('manage_server')"></q-item-label>
+        </q-item-section>
+      </q-item>
+    </q-list>
+  `,
+
+  created: function () {
+    if (window.user) {
+      this.user = LNbits.map.user(window.user)
+    }
+  }
+})
+
 Vue.component('lnbits-payment-details', {
   props: ['payment'],
+  mixins: [windowMixin],
   data: function () {
     return {
       LNBITS_DENOMINATION: LNBITS_DENOMINATION
     }
   },
   template: `
-    <div class="q-py-md" style="text-align: left">
-      <div class="row justify-center q-mb-md">
-        <q-badge v-if="hasTag" color="yellow" text-color="black">
-          #{{ payment.tag }}
-        </q-badge>
-      </div>
-      <div class="row">
-        <div class="col-3"><b>Date</b>:</div>
-        <div class="col-9">{{ payment.date }} ({{ payment.dateFrom }})</div>
-      </div>
-      <div class="row">
-        <div class="col-3"><b>Description</b>:</div>
-        <div class="col-9">{{ payment.memo }}</div>
-      </div>
-      <div class="row">
-        <div class="col-3"><b>Amount</b>:</div>
-        <div class="col-9">{{ (payment.amount / 1000).toFixed(3) }} {{LNBITS_DENOMINATION}}</div>
-      </div>
-      <div class="row">
-        <div class="col-3"><b>Fee</b>:</div>
-        <div class="col-9">{{ (payment.fee / 1000).toFixed(3) }} {{LNBITS_DENOMINATION}}</div>
-      </div>
-      <div class="row">
-        <div class="col-3"><b>Payment hash</b>:</div>
-        <div class="col-9 text-wrap mono">{{ payment.payment_hash }}</div>
-      </div>
-      <div class="row" v-if="payment.webhook">
-        <div class="col-3"><b>Webhook</b>:</div>
-        <div class="col-9 text-wrap mono">
-          {{ payment.webhook }}
-          <q-badge :color="webhookStatusColor" text-color="white">
-            {{ webhookStatusText }}
-          </q-badge>
-        </div>
-      </div>
-      <div class="row" v-if="hasPreimage">
-        <div class="col-3"><b>Payment proof</b>:</div>
-        <div class="col-9 text-wrap mono">{{ payment.preimage }}</div>
-      </div>
-      <div class="row" v-for="entry in extras">
-        <div class="col-3">
-          <q-badge v-if="hasTag" color="secondary" text-color="white">
-            extra
-          </q-badge>
-          <b>{{ entry.key }}</b>:
-        </div>
-        <div class="col-9 text-wrap mono">{{ entry.value }}</div>
-      </div>
-      <div class="row" v-if="hasSuccessAction">
-        <div class="col-3"><b>Success action</b>:</div>
-        <div class="col-9">
-          <lnbits-lnurlpay-success-action
-            :payment="payment"
-            :success_action="payment.extra.success_action"
-          ></lnbits-lnurlpay-success-action>
-        </div>
-      </div>
-    </div>
+  <div class="q-py-md" style="text-align: left">
+      
+  <div v-if="payment.tag" class="row justify-center q-mb-md">
+    <q-badge v-if="hasTag" color="yellow" text-color="black">
+      #{{ payment.tag }}
+    </q-badge>
+  </div>
+  
+  <div class="row">
+    <b v-text="$t('created')"></b>:
+    {{ payment.date }} ({{ payment.dateFrom }})
+  </div>
+  
+  <div class="row">
+   <b v-text="$t('expiry')"></b>:
+   {{ payment.expirydate }} ({{ payment.expirydateFrom }})
+  </div>
+  
+  <div class="row">
+   <b v-text="$t('amount')"></b>:
+    {{ (payment.amount / 1000).toFixed(3) }} {{LNBITS_DENOMINATION}}
+  </div>
+  
+  <div class="row">
+    <b v-text="$t('fee')"></b>:
+    {{ (payment.fee / 1000).toFixed(3) }} {{LNBITS_DENOMINATION}}
+  </div>
+  
+  <div class="text-wrap">
+    <b style="white-space: nowrap;" v-text="$t('payment_hash')"></b>:&nbsp;{{ payment.payment_hash }}
+        <q-icon name="content_copy" @click="copyText(payment.payment_hash)" size="1em" color="grey" class="q-mb-xs cursor-pointer" />
+  </div>
+  
+  <div class="text-wrap">
+    <b style="white-space: nowrap;" v-text="$t('memo')"></b>:&nbsp;{{ payment.memo }}
+  </div>
+
+  <div class="text-wrap" v-if="payment.webhook">
+    <b style="white-space: nowrap;" v-text="$t('webhook')"></b>:&nbsp;{{ payment.webhook }}:&nbsp;<q-badge :color="webhookStatusColor" text-color="white">
+      {{ webhookStatusText }}
+    </q-badge>
+  </div>
+
+  <div class="text-wrap" v-if="hasPreimage">
+    <b style="white-space: nowrap;" v-text="$t('payment_proof')"></b>:&nbsp;{{ payment.preimage }}
+  </div>
+
+  <div class="row" v-for="entry in extras">
+    <q-badge v-if="hasTag" color="secondary" text-color="white">
+      extra
+    </q-badge>
+    <b>{{ entry.key }}</b>:
+    {{ entry.value }}
+  </div>
+
+  <div class="row" v-if="hasSuccessAction">
+    <b>Success action</b>:
+      <lnbits-lnurlpay-success-action
+        :payment="payment"
+        :success_action="payment.extra.success_action"
+      ></lnbits-lnurlpay-success-action>
+  </div>
+
+</div>
   `,
   computed: {
     hasPreimage() {

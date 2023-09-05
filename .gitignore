@@ -23,9 +23,10 @@ tests/data/*.sqlite3
 *.pyc
 *.env
 .env
-.venv
-venv
+.super_user
+.pre-commit-config.yaml
 
+data
 *.sqlite3
 .pyre*
 
@@ -33,8 +34,18 @@ __bundle__
 
 coverage.xml
 node_modules
-lnbits/static/bundle.*
+lnbits/static/bundle.js
+lnbits/static/bundle.css
 docker
 
 # Nix
 *result*
+
+# fly.io
+fly.toml
+
+lnbits-backup.zip
+
+# Ignore extensions (post installable extension PR)
+extensions
+upgrades/

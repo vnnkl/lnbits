@@ -1,27 +1,12 @@
-imports_ok = True
-try:
-    import grpc
-    from google import protobuf
-    from grpc import RpcError
-except ImportError:  # pragma: nocover
-    imports_ok = False
-
 import asyncio
 import base64
-import binascii
 import hashlib
-from os import environ, error, getenv
+from os import environ
 from typing import AsyncGenerator, Dict, Optional
 
 from loguru import logger
 
-from .macaroon import AESCipher, load_macaroon
-
-if imports_ok:
-    import lnbits.wallets.lnd_grpc_files.lightning_pb2 as ln
-    import lnbits.wallets.lnd_grpc_files.lightning_pb2_grpc as lnrpc
-    import lnbits.wallets.lnd_grpc_files.router_pb2 as router
-    import lnbits.wallets.lnd_grpc_files.router_pb2_grpc as routerrpc
+from lnbits.settings import settings
 
 from .base import (
     InvoiceResponse,
@@ -30,6 +15,20 @@ from .base import (
     StatusResponse,
     Wallet,
 )
+from .macaroon import AESCipher, load_macaroon
+
+imports_ok = True
+try:
+    import grpc
+    from grpc import RpcError
+except ImportError:  # pragma: nocover
+    imports_ok = False
+
+if imports_ok:
+    import lnbits.wallets.lnd_grpc_files.lightning_pb2 as ln
+    import lnbits.wallets.lnd_grpc_files.lightning_pb2_grpc as lnrpc
+    import lnbits.wallets.lnd_grpc_files.router_pb2 as router
+    import lnbits.wallets.lnd_grpc_files.router_pb2_grpc as routerrpc
 
 
 def get_ssl_context(cert_path: str):
@@ -70,7 +69,7 @@ def b64_to_bytes(checking_id: str) -> bytes:
 
 
 def bytes_to_b64(r_hash: bytes) -> str:
-    return base64.b64encode(r_hash).decode("utf-8").replace("/", "_")
+    return base64.b64encode(r_hash).decode().replace("/", "_")
 
 
 def hex_to_b64(hex_str: str) -> str:
@@ -83,7 +82,7 @@ def hex_to_b64(hex_str: str) -> str:
 def hex_to_bytes(hex_str: str) -> bytes:
     try:
         return bytes.fromhex(hex_str)
-    except:
+    except Exception:
         return b""
 
 
@@ -101,29 +100,36 @@ class LndWallet(Wallet):
     def __init__(self):
         if not imports_ok:  # pragma: nocover
             raise ImportError(
-                "The `grpcio` and `protobuf` library must be installed to use `GRPC LndWallet`. Alternatively try using the LndRESTWallet."
+                "The `grpcio` and `protobuf` library must be installed to use `GRPC"
+                " LndWallet`. Alternatively try using the LndRESTWallet."
             )
 
-        endpoint = getenv("LND_GRPC_ENDPOINT")
-        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
-        self.port = int(getenv("LND_GRPC_PORT"))
-        self.cert_path = getenv("LND_GRPC_CERT") or getenv("LND_CERT")
+        endpoint = settings.lnd_grpc_endpoint
 
         macaroon = (
-            getenv("LND_GRPC_MACAROON")
-            or getenv("LND_GRPC_ADMIN_MACAROON")
-            or getenv("LND_ADMIN_MACAROON")
-            or getenv("LND_GRPC_INVOICE_MACAROON")
-            or getenv("LND_INVOICE_MACAROON")
+            settings.lnd_grpc_macaroon
+            or settings.lnd_grpc_admin_macaroon
+            or settings.lnd_admin_macaroon
+            or settings.lnd_grpc_invoice_macaroon
+            or settings.lnd_invoice_macaroon
         )
 
-        encrypted_macaroon = getenv("LND_GRPC_MACAROON_ENCRYPTED")
+        encrypted_macaroon = settings.lnd_grpc_macaroon_encrypted
         if encrypted_macaroon:
             macaroon = AESCipher(description="macaroon decryption").decrypt(
                 encrypted_macaroon
             )
-        self.macaroon = load_macaroon(macaroon)
 
+        cert_path = settings.lnd_grpc_cert or settings.lnd_cert
+        if not endpoint or not macaroon or not cert_path or not settings.lnd_grpc_port:
+            raise Exception("cannot initialize lndrest")
+
+        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
+        self.port = int(settings.lnd_grpc_port)
+        self.cert_path = settings.lnd_grpc_cert or settings.lnd_cert
+
+        self.macaroon = load_macaroon(macaroon)
+        self.cert_path = cert_path
         cert = open(self.cert_path, "rb").read()
         creds = grpc.ssl_channel_credentials(cert)
         auth_creds = grpc.metadata_call_credentials(self.metadata_callback)
@@ -140,8 +146,6 @@ class LndWallet(Wallet):
     async def status(self) -> StatusResponse:
         try:
             resp = await self.rpc.ChannelBalance(ln.ChannelBalanceRequest())
-        except RpcError as exc:
-            return StatusResponse(str(exc._details), 0)
         except Exception as exc:
             return StatusResponse(str(exc), 0)
 
@@ -153,19 +157,25 @@ class LndWallet(Wallet):
         memo: Optional[str] = None,
         description_hash: Optional[bytes] = None,
         unhashed_description: Optional[bytes] = None,
+        **kwargs,
     ) -> InvoiceResponse:
-        params: Dict = {"value": amount, "expiry": 600, "private": True}
+        data: Dict = {
+            "description_hash": b"",
+            "value": amount,
+            "private": True,
+            "memo": memo or "",
+        }
+        if kwargs.get("expiry"):
+            data["expiry"] = kwargs["expiry"]
         if description_hash:
-            params["description_hash"] = description_hash
+            data["description_hash"] = description_hash
         elif unhashed_description:
-            params["description_hash"] = hashlib.sha256(
+            data["description_hash"] = hashlib.sha256(
                 unhashed_description
             ).digest()  # as bytes directly
-        else:
-            params["memo"] = memo or ""
 
         try:
-            req = ln.Invoice(**params)
+            req = ln.Invoice(**data)
             resp = await self.rpc.AddInvoice(req)
         except Exception as exc:
             error_message = str(exc)
@@ -185,8 +195,6 @@ class LndWallet(Wallet):
         )
         try:
             resp = await self.routerpc.SendPaymentV2(req).read()
-        except RpcError as exc:
-            return PaymentResponse(False, None, None, None, exc._details)
         except Exception as exc:
             return PaymentResponse(False, None, None, None, str(exc))
 
@@ -212,11 +220,11 @@ class LndWallet(Wallet):
         error_message = None
         checking_id = None
 
-        if statuses[resp.status] == True:  # SUCCEEDED
+        if statuses[resp.status] is True:  # SUCCEEDED
             fee_msat = -resp.htlcs[-1].route.total_fees_msat
             preimage = resp.payment_preimage
             checking_id = resp.payment_hash
-        elif statuses[resp.status] == False:
+        elif statuses[resp.status] is False:
             error_message = failure_reasons[resp.failure_reason]
 
         return PaymentResponse(
@@ -227,14 +235,14 @@ class LndWallet(Wallet):
         try:
             r_hash = hex_to_bytes(checking_id)
             if len(r_hash) != 32:
-                raise binascii.Error
-        except binascii.Error:
+                raise ValueError
+        except ValueError:
             # this may happen if we switch between backend wallets
             # that use different checking_id formats
             return PaymentStatus(None)
         try:
             resp = await self.rpc.LookupInvoice(ln.PaymentHash(r_hash=r_hash))
-        except RpcError as exc:
+        except RpcError:
             return PaymentStatus(None)
         if resp.settled:
             return PaymentStatus(True)
@@ -248,8 +256,8 @@ class LndWallet(Wallet):
         try:
             r_hash = hex_to_bytes(checking_id)
             if len(r_hash) != 32:
-                raise binascii.Error
-        except binascii.Error:
+                raise ValueError
+        except ValueError:
             # this may happen if we switch between backend wallets
             # that use different checking_id formats
             return PaymentStatus(None)
@@ -281,7 +289,7 @@ class LndWallet(Wallet):
                         bytes_to_hex(payment.htlcs[-1].preimage),
                     )
                 return PaymentStatus(statuses[payment.status])
-        except:  # most likely the payment wasn't found
+        except Exception:  # most likely the payment wasn't found
             return PaymentStatus(None)
 
         return PaymentStatus(None)
@@ -298,6 +306,7 @@ class LndWallet(Wallet):
                     yield checking_id
             except Exception as exc:
                 logger.error(
-                    f"lost connection to lnd invoices stream: '{exc}', retrying in 5 seconds"
+                    f"lost connection to lnd invoices stream: '{exc}', "
+                    "retrying in 5 seconds"
                 )
                 await asyncio.sleep(5)

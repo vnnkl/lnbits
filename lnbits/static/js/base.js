@@ -1,6 +1,14 @@
 /* globals crypto, moment, Vue, axios, Quasar, _ */
 
+Vue.use(VueI18n)
+
 window.LOCALE = 'en'
+window.i18n = new VueI18n({
+  locale: window.LOCALE,
+  fallbackLocale: window.LOCALE,
+  messages: window.localisation
+})
+
 window.EventHub = new Vue()
 window.LNbits = {
   api: {
@@ -59,8 +67,13 @@ window.LNbits = {
     getWallet: function (wallet) {
       return this.request('get', '/api/v1/wallet', wallet.inkey)
     },
-    getPayments: function (wallet) {
-      return this.request('get', '/api/v1/payments', wallet.inkey)
+    getPayments: function (wallet, query) {
+      const params = new URLSearchParams(query)
+      return this.request(
+        'get',
+        '/api/v1/payments/paginated?' + params,
+        wallet.inkey
+      )
     },
     getPayment: function (wallet, paymentHash) {
       return this.request(
@@ -126,7 +139,7 @@ window.LNbits = {
           'isAdminOnly',
           'name',
           'shortDescription',
-          'icon',
+          'tile',
           'contributors',
           'hidden'
         ],
@@ -138,9 +151,11 @@ window.LNbits = {
     user: function (data) {
       var obj = {
         id: data.id,
+        admin: data.admin,
         email: data.email,
         extensions: data.extensions,
-        wallets: data.wallets
+        wallets: data.wallets,
+        admin: data.admin
       }
       var mapWallet = this.wallet
       obj.wallets = obj.wallets
@@ -163,7 +178,8 @@ window.LNbits = {
         id: data.id,
         name: data.name,
         adminkey: data.adminkey,
-        inkey: data.inkey
+        inkey: data.inkey,
+        currency: data.currency
       }
       newWallet.msat = data.balance_msat
       newWallet.sat = Math.round(data.balance_msat / 1000)
@@ -175,7 +191,7 @@ window.LNbits = {
     },
     payment: function (data) {
       obj = {
-        checking_id: data.id,
+        checking_id: data.checking_id,
         pending: data.pending,
         amount: data.amount,
         fee: data.fee,
@@ -184,10 +200,13 @@ window.LNbits = {
         bolt11: data.bolt11,
         preimage: data.preimage,
         payment_hash: data.payment_hash,
+        expiry: data.expiry,
         extra: data.extra,
         wallet_id: data.wallet_id,
         webhook: data.webhook,
-        webhook_status: data.webhook_status
+        webhook_status: data.webhook_status,
+        fiat_amount: data.fiat_amount,
+        fiat_currency: data.fiat_currency
       }
 
       obj.date = Quasar.utils.date.formatDate(
@@ -195,6 +214,11 @@ window.LNbits = {
         'YYYY-MM-DD HH:mm'
       )
       obj.dateFrom = moment(obj.date).fromNow()
+      obj.expirydate = Quasar.utils.date.formatDate(
+        new Date(obj.expiry * 1000),
+        'YYYY-MM-DD HH:mm'
+      )
+      obj.expirydateFrom = moment(obj.expirydate).fromNow()
       obj.msat = obj.amount
       obj.sat = obj.msat / 1000
       obj.tag = obj.extra.tag
@@ -219,6 +243,15 @@ window.LNbits = {
           color: 'grey'
         }
       })
+    },
+    digestMessage: async function (message) {
+      const msgUint8 = new TextEncoder().encode(message)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const hashHex = hashArray
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+      return hashHex
     },
     formatCurrency: function (value, currency) {
       return new Intl.NumberFormat(window.LOCALE, {
@@ -312,6 +345,7 @@ window.LNbits = {
 }
 
 window.windowMixin = {
+  i18n: window.i18n,
   data: function () {
     return {
       g: {
@@ -321,12 +355,20 @@ window.windowMixin = {
         user: null,
         wallet: null,
         payments: [],
-        allowedThemes: null
+        allowedThemes: null,
+        langs: []
       }
     }
   },
 
   methods: {
+    activeLanguage: function (lang) {
+      return window.i18n.locale === lang
+    },
+    changeLanguage: function (newValue) {
+      window.i18n.locale = newValue
+      this.$q.localStorage.set('lnbits.lang', newValue)
+    },
     changeColor: function (newValue) {
       document.body.setAttribute('data-theme', newValue)
       this.$q.localStorage.set('lnbits.theme', newValue)
@@ -355,6 +397,14 @@ window.windowMixin = {
       this.$q.dark.set(true)
     }
     this.g.allowedThemes = window.allowedThemes ?? ['bitcoin']
+
+    let locale = this.$q.localStorage.getItem('lnbits.lang')
+    if (locale) {
+      window.LOCALE = locale
+      window.i18n.locale = locale
+    }
+
+    this.g.langs = window.langs ?? []
 
     addEventListener('offline', event => {
       this.g.offline = true

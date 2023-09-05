@@ -1,14 +1,10 @@
 import asyncio
-import hmac
-from http import HTTPStatus
-from os import getenv
 from typing import AsyncGenerator, Optional
 
 import httpx
-from fastapi.exceptions import HTTPException
 from loguru import logger
 
-from lnbits.helpers import url_for
+from lnbits.settings import settings
 
 from .base import (
     InvoiceResponse,
@@ -24,22 +20,28 @@ class OpenNodeWallet(Wallet):
     """https://developers.opennode.com/"""
 
     def __init__(self):
-        endpoint = getenv("OPENNODE_API_ENDPOINT")
-        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
-
+        endpoint = settings.opennode_api_endpoint
         key = (
-            getenv("OPENNODE_KEY")
-            or getenv("OPENNODE_ADMIN_KEY")
-            or getenv("OPENNODE_INVOICE_KEY")
+            settings.opennode_key
+            or settings.opennode_admin_key
+            or settings.opennode_invoice_key
         )
+        if not endpoint or not key:
+            raise Exception("cannot initialize opennode")
+
+        self.endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
         self.auth = {"Authorization": key}
+        self.client = httpx.AsyncClient(base_url=self.endpoint, headers=self.auth)
+
+    async def cleanup(self):
+        try:
+            await self.client.aclose()
+        except RuntimeError as e:
+            logger.warning(f"Error closing wallet connection: {e}")
 
     async def status(self) -> StatusResponse:
         try:
-            async with httpx.AsyncClient() as client:
-                r = await client.get(
-                    f"{self.endpoint}/v1/account/balance", headers=self.auth, timeout=40
-                )
+            r = await self.client.get("/v1/account/balance", timeout=40)
         except (httpx.ConnectError, httpx.RequestError):
             return StatusResponse(f"Unable to connect to '{self.endpoint}'", 0)
 
@@ -60,17 +62,15 @@ class OpenNodeWallet(Wallet):
         if description_hash or unhashed_description:
             raise Unsupported("description_hash")
 
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.endpoint}/v1/charges",
-                headers=self.auth,
-                json={
-                    "amount": amount,
-                    "description": memo or "",
-                    # "callback_url": url_for("/webhook_listener", _external=True),
-                },
-                timeout=40,
-            )
+        r = await self.client.post(
+            "/v1/charges",
+            json={
+                "amount": amount,
+                "description": memo or "",
+                # "callback_url": url_for("/webhook_listener", _external=True),
+            },
+            timeout=40,
+        )
 
         if r.is_error:
             error_message = r.json()["message"]
@@ -82,13 +82,11 @@ class OpenNodeWallet(Wallet):
         return InvoiceResponse(True, checking_id, payment_request, None)
 
     async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                f"{self.endpoint}/v2/withdrawals",
-                headers=self.auth,
-                json={"type": "ln", "address": bolt11},
-                timeout=None,
-            )
+        r = await self.client.post(
+            "/v2/withdrawals",
+            json={"type": "ln", "address": bolt11},
+            timeout=None,
+        )
 
         if r.is_error:
             error_message = r.json()["message"]
@@ -104,10 +102,7 @@ class OpenNodeWallet(Wallet):
         return PaymentResponse(True, checking_id, fee_msat, None, None)
 
     async def get_invoice_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"{self.endpoint}/v1/charge/{checking_id}", headers=self.auth
-            )
+        r = await self.client.get(f"/v1/charge/{checking_id}")
         if r.is_error:
             return PaymentStatus(None)
         data = r.json()["data"]
@@ -115,10 +110,7 @@ class OpenNodeWallet(Wallet):
         return PaymentStatus(statuses[data.get("status")])
 
     async def get_payment_status(self, checking_id: str) -> PaymentStatus:
-        async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"{self.endpoint}/v1/withdrawal/{checking_id}", headers=self.auth
-            )
+        r = await self.client.get(f"/v1/withdrawal/{checking_id}")
 
         if r.is_error:
             return PaymentStatus(None)
@@ -141,16 +133,20 @@ class OpenNodeWallet(Wallet):
             yield value
 
     async def webhook_listener(self):
-        data = await request.form
-        if "status" not in data or data["status"] != "paid":
-            raise HTTPException(status_code=HTTPStatus.NO_CONTENT)
+        logger.error("webhook listener for opennode is disabled.")
+        return
+        # TODO: request.form is undefined, was it something with Flask or quart?
+        # probably issue introduced when refactoring?
+        # data = await request.form  # type: ignore
+        # if "status" not in data or data["status"] != "paid":
+        #     raise HTTPException(status_code=HTTPStatus.NO_CONTENT)
 
-        charge_id = data["id"]
-        x = hmac.new(self.auth["Authorization"].encode("ascii"), digestmod="sha256")
-        x.update(charge_id.encode("ascii"))
-        if x.hexdigest() != data["hashed_order"]:
-            logger.error("invalid webhook, not from opennode")
-            raise HTTPException(status_code=HTTPStatus.NO_CONTENT)
+        # charge_id = data["id"]
+        # x = hmac.new(self.auth["Authorization"].encode("ascii"), digestmod="sha256")
+        # x.update(charge_id.encode("ascii"))
+        # if x.hexdigest() != data["hashed_order"]:
+        #     logger.error("invalid webhook, not from opennode")
+        #     raise HTTPException(status_code=HTTPStatus.NO_CONTENT)
 
-        await self.queue.put(charge_id)
-        raise HTTPException(status_code=HTTPStatus.NO_CONTENT)
+        # await self.queue.put(charge_id)
+        # raise HTTPException(status_code=HTTPStatus.NO_CONTENT)

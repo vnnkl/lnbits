@@ -1,52 +1,86 @@
 import asyncio
-import binascii
 import hashlib
 import json
-import time
 import uuid
 from http import HTTPStatus
 from io import BytesIO
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import ParseResult, parse_qs, urlencode, urlparse, urlunparse
 
-import async_timeout
 import httpx
 import pyqrcode
-from fastapi import Depends, Header, Query, Request
+from fastapi import (
+    Body,
+    Depends,
+    Header,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.exceptions import HTTPException
-from fastapi.params import Body
 from loguru import logger
-from pydantic import BaseModel
-from pydantic.fields import Field
-from sse_starlette.sse import EventSourceResponse, ServerSentEvent
-from starlette.responses import HTMLResponse, StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+from starlette.responses import RedirectResponse, StreamingResponse
 
 from lnbits import bolt11, lnurl
-from lnbits.core.models import Payment, Wallet
+from lnbits.core.helpers import (
+    migrate_extension_database,
+    stop_extension_background_work,
+)
+from lnbits.core.models import (
+    ConversionData,
+    CreateInvoice,
+    CreateLnurl,
+    CreateLnurlAuth,
+    DecodePayment,
+    Payment,
+    PaymentFilters,
+    User,
+    Wallet,
+    WalletType,
+)
+from lnbits.db import Filters, Page
 from lnbits.decorators import (
     WalletTypeInfo,
+    check_admin,
     get_key_type,
+    parse_filters,
     require_admin_key,
     require_invoice_key,
 )
-from lnbits.helpers import url_for, urlsafe_short_hash
-from lnbits.settings import LNBITS_ADMIN_USERS, LNBITS_SITE_TITLE, WALLET
+from lnbits.extension_manager import (
+    CreateExtension,
+    Extension,
+    ExtensionRelease,
+    InstallableExtension,
+    fetch_github_release_config,
+    get_valid_extensions,
+)
+from lnbits.helpers import generate_filter_params_openapi, url_for
+from lnbits.settings import settings
 from lnbits.utils.exchange_rates import (
     currencies,
     fiat_amount_as_satoshis,
     satoshis_amount_as_fiat,
 )
 
-from .. import core_app, db
+from .. import core_app, core_app_extra, db
 from ..crud import (
-    create_payment,
+    add_installed_extension,
+    create_tinyurl,
+    delete_dbversion,
+    delete_installed_extension,
+    delete_tinyurl,
+    drop_extension_db,
+    get_dbversions,
     get_payments,
+    get_payments_paginated,
     get_standalone_payment,
-    get_total_balance,
-    get_wallet,
+    get_tinyurl,
+    get_tinyurl_by_url,
     get_wallet_for_key,
     save_balance_check,
-    update_payment_status,
     update_wallet,
 )
 from ..services import (
@@ -56,13 +90,20 @@ from ..services import (
     create_invoice,
     pay_invoice,
     perform_lnurlauth,
+    websocketManager,
+    websocketUpdater,
 )
 from ..tasks import api_invoice_listeners
 
 
+@core_app.get("/api/v1/health", status_code=HTTPStatus.OK)
+async def health():
+    return
+
+
 @core_app.get("/api/v1/wallet")
 async def api_wallet(wallet: WalletTypeInfo = Depends(get_key_type)):
-    if wallet.wallet_type == 0:
+    if wallet.wallet_type == WalletType.admin:
         return {
             "id": wallet.wallet.id,
             "name": wallet.wallet.name,
@@ -72,37 +113,8 @@ async def api_wallet(wallet: WalletTypeInfo = Depends(get_key_type)):
         return {"name": wallet.wallet.name, "balance": wallet.wallet.balance_msat}
 
 
-@core_app.put("/api/v1/wallet/balance/{amount}")
-async def api_update_balance(
-    amount: int, wallet: WalletTypeInfo = Depends(get_key_type)
-):
-    if wallet.wallet.user not in LNBITS_ADMIN_USERS:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail="Not an admin user"
-        )
-
-    payHash = urlsafe_short_hash()
-    await create_payment(
-        wallet_id=wallet.wallet.id,
-        checking_id=payHash,
-        payment_request="selfPay",
-        payment_hash=payHash,
-        amount=amount * 1000,
-        memo="selfPay",
-        fee=0,
-    )
-    await update_payment_status(checking_id=payHash, pending=False)
-    updatedWallet = await get_wallet(wallet.wallet.id)
-
-    return {
-        "id": wallet.wallet.id,
-        "name": wallet.wallet.name,
-        "balance": amount,
-    }
-
-
 @core_app.put("/api/v1/wallet/{new_name}")
-async def api_update_wallet(
+async def api_update_wallet_name(
     new_name: str, wallet: WalletTypeInfo = Depends(require_admin_key)
 ):
     await update_wallet(wallet.wallet.id, new_name)
@@ -113,20 +125,34 @@ async def api_update_wallet(
     }
 
 
-@core_app.get("/api/v1/payments")
-async def api_payments(
-    limit: Optional[int] = None,
-    offset: Optional[int] = None,
-    wallet: WalletTypeInfo = Depends(get_key_type),
+@core_app.patch("/api/v1/wallet", response_model=Wallet)
+async def api_update_wallet(
+    name: Optional[str] = Body(None),
+    currency: Optional[str] = Body(None),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
-    pendingPayments = await get_payments(
+    return await update_wallet(wallet.wallet.id, name, currency)
+
+
+@core_app.get(
+    "/api/v1/payments",
+    name="Payment List",
+    summary="get list of payments",
+    response_description="list of payments",
+    response_model=List[Payment],
+    openapi_extra=generate_filter_params_openapi(PaymentFilters),
+)
+async def api_payments(
+    wallet: WalletTypeInfo = Depends(get_key_type),
+    filters: Filters = Depends(parse_filters(PaymentFilters)),
+):
+    pending_payments = await get_payments(
         wallet_id=wallet.wallet.id,
         pending=True,
         exclude_uncheckable=True,
-        limit=limit,
-        offset=offset,
+        filters=filters,
     )
-    for payment in pendingPayments:
+    for payment in pending_payments:
         await check_transaction_status(
             wallet_id=payment.wallet_id, payment_hash=payment.payment_hash
         )
@@ -134,71 +160,86 @@ async def api_payments(
         wallet_id=wallet.wallet.id,
         pending=True,
         complete=True,
-        limit=limit,
-        offset=offset,
+        filters=filters,
     )
 
 
-class CreateInvoiceData(BaseModel):
-    out: Optional[bool] = True
-    amount: float = Query(None, ge=0)
-    memo: Optional[str] = None
-    unit: Optional[str] = "sat"
-    description_hash: Optional[str] = None
-    unhashed_description: Optional[str] = None
-    lnurl_callback: Optional[str] = None
-    lnurl_balance_check: Optional[str] = None
-    extra: Optional[dict] = None
-    webhook: Optional[str] = None
-    internal: Optional[bool] = False
-    bolt11: Optional[str] = None
+@core_app.get(
+    "/api/v1/payments/paginated",
+    name="Payment List",
+    summary="get paginated list of payments",
+    response_description="list of payments",
+    response_model=Page[Payment],
+    openapi_extra=generate_filter_params_openapi(PaymentFilters),
+)
+async def api_payments_paginated(
+    wallet: WalletTypeInfo = Depends(get_key_type),
+    filters: Filters = Depends(parse_filters(PaymentFilters)),
+):
+    pending = await get_payments_paginated(
+        wallet_id=wallet.wallet.id,
+        pending=True,
+        exclude_uncheckable=True,
+        filters=filters,
+    )
+    for payment in pending.data:
+        await check_transaction_status(
+            wallet_id=payment.wallet_id, payment_hash=payment.payment_hash
+        )
+    page = await get_payments_paginated(
+        wallet_id=wallet.wallet.id,
+        pending=True,
+        complete=True,
+        filters=filters,
+    )
+    return page
 
 
-async def api_payments_create_invoice(data: CreateInvoiceData, wallet: Wallet):
-    if data.description_hash:
-        try:
-            description_hash = binascii.unhexlify(data.description_hash)
-        except binascii.Error:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="'description_hash' must be a valid hex string",
-            )
-        unhashed_description = b""
+async def api_payments_create_invoice(data: CreateInvoice, wallet: Wallet):
+    description_hash = b""
+    unhashed_description = b""
+    memo = data.memo or settings.lnbits_site_title
+    if data.description_hash or data.unhashed_description:
+        if data.description_hash:
+            try:
+                description_hash = bytes.fromhex(data.description_hash)
+            except ValueError:
+                raise HTTPException(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    detail="'description_hash' must be a valid hex string",
+                )
+        if data.unhashed_description:
+            try:
+                unhashed_description = bytes.fromhex(data.unhashed_description)
+            except ValueError:
+                raise HTTPException(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    detail="'unhashed_description' must be a valid hex string",
+                )
+        # do not save memo if description_hash or unhashed_description is set
         memo = ""
-    elif data.unhashed_description:
-        try:
-            unhashed_description = binascii.unhexlify(data.unhashed_description)
-        except binascii.Error:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="'unhashed_description' must be a valid hex string",
-            )
-        description_hash = b""
-        memo = ""
-    else:
-        description_hash = b""
-        unhashed_description = b""
-        memo = data.memo or LNBITS_SITE_TITLE
-    if data.unit == "sat":
-        amount = int(data.amount)
-    else:
-        assert data.unit is not None, "unit not set"
-        price_in_sats = await fiat_amount_as_satoshis(data.amount, data.unit)
-        amount = price_in_sats
 
     async with db.connect() as conn:
         try:
             payment_hash, payment_request = await create_invoice(
                 wallet_id=wallet.id,
-                amount=amount,
+                amount=data.amount,
                 memo=memo,
+                currency=data.unit,
                 description_hash=description_hash,
                 unhashed_description=unhashed_description,
+                expiry=data.expiry,
                 extra=data.extra,
                 webhook=data.webhook,
                 internal=data.internal,
                 conn=conn,
             )
+            # NOTE: we get the checking_id with a seperate query because create_invoice
+            # does not return it and it would be a big hustle to change its return type
+            # (used across extensions)
+            payment_db = await get_standalone_payment(payment_hash, conn=conn)
+            assert payment_db is not None, "payment not found"
+            checking_id = payment_db.checking_id
         except InvoiceFailure as e:
             raise HTTPException(status_code=520, detail=str(e))
         except Exception as exc:
@@ -233,14 +274,15 @@ async def api_payments_create_invoice(data: CreateInvoiceData, wallet: Wallet):
                         lnurl_response = resp["reason"]
                     else:
                         lnurl_response = True
-            except (httpx.ConnectError, httpx.RequestError):
+            except (httpx.ConnectError, httpx.RequestError) as ex:
+                logger.error(ex)
                 lnurl_response = False
 
     return {
         "payment_hash": invoice.payment_hash,
         "payment_request": payment_request,
         # maintain backwards compatibility with API clients:
-        "checking_id": invoice.payment_hash,
+        "checking_id": checking_id,
         "lnurl_response": lnurl_response,
     }
 
@@ -266,13 +308,22 @@ async def api_payments_pay_invoice(bolt11: str, wallet: Wallet):
 
 @core_app.post(
     "/api/v1/payments",
+    summary="Create or pay an invoice",
+    description="""
+        This endpoint can be used both to generate and pay a BOLT11 invoice.
+        To generate a new invoice for receiving funds into the authorized account,
+        specify at least the first four fields in the POST body: `out: false`,
+        `amount`, `unit`, and `memo`. To pay an arbitrary invoice from the funds
+        already in the authorized account, specify `out: true` and use the `bolt11`
+        field to supply the BOLT11 invoice to be paid.
+    """,
     status_code=HTTPStatus.CREATED,
 )
 async def api_payments_create(
     wallet: WalletTypeInfo = Depends(require_invoice_key),
-    invoiceData: CreateInvoiceData = Body(...),  # type: ignore
+    invoiceData: CreateInvoice = Body(...),
 ):
-    if invoiceData.out is True and wallet.wallet_type == 0:
+    if invoiceData.out is True and wallet.wallet_type == WalletType.admin:
         if not invoiceData.bolt11:
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST,
@@ -291,17 +342,9 @@ async def api_payments_create(
         )
 
 
-class CreateLNURLData(BaseModel):
-    description_hash: str
-    callback: str
-    amount: int
-    comment: Optional[str] = None
-    description: Optional[str] = None
-
-
 @core_app.post("/api/v1/payments/lnurl")
 async def api_payments_pay_lnurl(
-    data: CreateLNURLData, wallet: WalletTypeInfo = Depends(require_admin_key)
+    data: CreateLnurl, wallet: WalletTypeInfo = Depends(require_admin_key)
 ):
     domain = urlparse(data.callback).netloc
 
@@ -337,13 +380,23 @@ async def api_payments_pay_lnurl(
     if invoice.amount_msat != data.amount:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"{domain} returned an invalid invoice. Expected {data.amount} msat, got {invoice.amount_msat}.",
+            detail=(
+                (
+                    f"{domain} returned an invalid invoice. Expected"
+                    f" {data.amount} msat, got {invoice.amount_msat}."
+                ),
+            ),
         )
 
     if invoice.description_hash != data.description_hash:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"{domain} returned an invalid invoice. Expected description_hash == {data.description_hash}, got {invoice.description_hash}.",
+            detail=(
+                (
+                    f"{domain} returned an invalid invoice. Expected description_hash"
+                    f" == {data.description_hash}, got {invoice.description_hash}."
+                ),
+            ),
         )
 
     extra = {}
@@ -381,35 +434,18 @@ async def subscribe_wallet_invoices(request: Request, wallet: Wallet):
     logger.debug(f"adding sse listener for wallet: {uid}")
     api_invoice_listeners[uid] = payment_queue
 
-    send_queue: asyncio.Queue[Tuple[str, Payment]] = asyncio.Queue(0)
-
-    async def payment_received() -> None:
-        while True:
-            try:
-                async with async_timeout.timeout(1):
-                    payment: Payment = await payment_queue.get()
-                    if payment.wallet_id == this_wallet_id:
-                        logger.debug("sse listener: payment receieved", payment)
-                        await send_queue.put(("payment-received", payment))
-            except asyncio.TimeoutError:
-                pass
-
-    task = asyncio.create_task(payment_received())
-
     try:
         while True:
             if await request.is_disconnected():
                 await request.close()
                 break
-            typ, data = await send_queue.get()
-            if data:
-                jdata = json.dumps(dict(data.dict(), pending=False))
-
-            yield dict(data=jdata, event=typ)
-    except asyncio.CancelledError as e:
-        logger.debug(f"CancelledError on listener {uid}: {e}")
+            payment: Payment = await payment_queue.get()
+            if payment.wallet_id == this_wallet_id:
+                logger.debug("sse listener: payment received", payment)
+                yield dict(data=payment.json(), event="payment-received")
+    except asyncio.CancelledError:
+        logger.debug(f"removing listener for wallet {uid}")
         api_invoice_listeners.pop(uid)
-        task.cancel()
         return
 
 
@@ -424,14 +460,16 @@ async def api_payments_sse(
     )
 
 
+# TODO: refactor this route into a public and admin one
 @core_app.get("/api/v1/payments/{payment_hash}")
 async def api_payment(payment_hash, X_Api_Key: Optional[str] = Header(None)):
     # We use X_Api_Key here because we want this call to work with and without keys
     # If a valid key is given, we also return the field "details", otherwise not
-    wallet = await get_wallet_for_key(X_Api_Key) if type(X_Api_Key) == str else None
+    wallet = await get_wallet_for_key(X_Api_Key) if isinstance(X_Api_Key, str) else None
 
-    # we have to specify the wallet id here, because postgres and sqlite return internal payments in different order
-    # and get_standalone_payment otherwise just fetches the first one, causing unpredictable results
+    # we have to specify the wallet id here, because postgres and sqlite return
+    # internal payments in different order and get_standalone_payment otherwise
+    # just fetches the first one, causing unpredictable results
     payment = await get_standalone_payment(
         payment_hash, wallet_id=wallet.id if wallet else None
     )
@@ -473,7 +511,7 @@ async def api_lnurlscan(code: str, wallet: WalletTypeInfo = Depends(get_key_type
     try:
         url = lnurl.decode(code)
         domain = urlparse(url).netloc
-    except:
+    except Exception:
         # parse internet identifier (user@domain.com)
         name_domain = code.split("@")
         if len(name_domain) == 2 and len(name_domain[1].split(".")) >= 2:
@@ -498,10 +536,12 @@ async def api_lnurlscan(code: str, wallet: WalletTypeInfo = Depends(get_key_type
         params.update(callback=url)  # with k1 already in it
 
         lnurlauth_key = wallet.wallet.lnurlauth_key(domain)
+        assert lnurlauth_key.verifying_key
         params.update(pubkey=lnurlauth_key.verifying_key.to_string("compressed").hex())
     else:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             r = await client.get(url, timeout=5)
+            r.raise_for_status()
             if r.is_error:
                 raise HTTPException(
                     status_code=HTTPStatus.SERVICE_UNAVAILABLE,
@@ -555,17 +595,17 @@ async def api_lnurlscan(code: str, wallet: WalletTypeInfo = Depends(get_key_type
 
                 params.update(
                     description_hash=hashlib.sha256(
-                        data["metadata"].encode("utf-8")
+                        data["metadata"].encode()
                     ).hexdigest()
                 )
                 metadata = json.loads(data["metadata"])
                 for [k, v] in metadata:
                     if k == "text/plain":
                         params.update(description=v)
-                    if k == "image/jpeg;base64" or k == "image/png;base64":
-                        data_uri = "data:" + k + "," + v
+                    if k in ("image/jpeg;base64", "image/png;base64"):
+                        data_uri = f"data:{k},{v}"
                         params.update(image=data_uri)
-                    if k == "text/email" or k == "text/identifier":
+                    if k in ("text/email", "text/identifier"):
                         params.update(targetUser=v)
                 params.update(commentAllowed=data.get("commentAllowed", 0))
 
@@ -581,12 +621,8 @@ async def api_lnurlscan(code: str, wallet: WalletTypeInfo = Depends(get_key_type
     return params
 
 
-class DecodePayment(BaseModel):
-    data: str
-
-
-@core_app.post("/api/v1/payments/decode")
-async def api_payments_decode(data: DecodePayment):
+@core_app.post("/api/v1/payments/decode", status_code=HTTPStatus.OK)
+async def api_payments_decode(data: DecodePayment, response: Response):
     payment_str = data.data
     try:
         if payment_str[:5] == "LNURL":
@@ -606,19 +642,16 @@ async def api_payments_decode(data: DecodePayment):
                 "route_hints": invoice.route_hints,
                 "min_final_cltv_expiry": invoice.min_final_cltv_expiry,
             }
-    except:
+    except Exception:
+        response.status_code = HTTPStatus.BAD_REQUEST
         return {"message": "Failed to decode"}
-
-
-class Callback(BaseModel):
-    callback: str = Query(...)
 
 
 @core_app.post("/api/v1/lnurlauth")
 async def api_perform_lnurlauth(
-    callback: Callback, wallet: WalletTypeInfo = Depends(require_admin_key)
+    data: CreateLnurlAuth, wallet: WalletTypeInfo = Depends(require_admin_key)
 ):
-    err = await perform_lnurlauth(callback.callback, wallet=wallet)
+    err = await perform_lnurlauth(data.callback, wallet=wallet)
     if err:
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=err.reason
@@ -628,13 +661,13 @@ async def api_perform_lnurlauth(
 
 @core_app.get("/api/v1/currencies")
 async def api_list_currencies_available():
+    if len(settings.lnbits_allowed_currencies) > 0:
+        return [
+            item
+            for item in currencies.keys()
+            if item.upper() in settings.lnbits_allowed_currencies
+        ]
     return list(currencies.keys())
-
-
-class ConversionData(BaseModel):
-    from_: str = Field("sat", alias="from")
-    amount: float
-    to: str = Query("usd")
 
 
 @core_app.post("/api/v1/conversion")
@@ -656,7 +689,7 @@ async def api_fiat_as_sats(data: ConversionData):
 
 
 @core_app.get("/api/v1/qrcode/{data}", response_class=StreamingResponse)
-async def img(request: Request, data):
+async def img(data):
     qr = pyqrcode.create(data)
     stream = BytesIO()
     qr.svg(stream, scale=3)
@@ -676,24 +709,280 @@ async def img(request: Request, data):
     )
 
 
-@core_app.get("/api/v1/audit/")
-async def api_auditor(wallet: WalletTypeInfo = Depends(get_key_type)):
-    if wallet.wallet.user not in LNBITS_ADMIN_USERS:
+@core_app.websocket("/api/v1/ws/{item_id}")
+async def websocket_connect(websocket: WebSocket, item_id: str):
+    await websocketManager.connect(websocket, item_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        websocketManager.disconnect(websocket)
+
+
+@core_app.post("/api/v1/ws/{item_id}")
+async def websocket_update_post(item_id: str, data: str):
+    try:
+        await websocketUpdater(item_id, data)
+        return {"sent": True, "data": data}
+    except Exception:
+        return {"sent": False, "data": data}
+
+
+@core_app.get("/api/v1/ws/{item_id}/{data}")
+async def websocket_update_get(item_id: str, data: str):
+    try:
+        await websocketUpdater(item_id, data)
+        return {"sent": True, "data": data}
+    except Exception:
+        return {"sent": False, "data": data}
+
+
+@core_app.post("/api/v1/extension")
+async def api_install_extension(
+    data: CreateExtension, user: User = Depends(check_admin)
+):
+    release = await InstallableExtension.get_extension_release(
+        data.ext_id, data.source_repo, data.archive
+    )
+    if not release:
         raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail="Not an admin user"
+            status_code=HTTPStatus.NOT_FOUND, detail="Release not found"
         )
 
-    total_balance = await get_total_balance()
-    error_message, node_balance = await WALLET.status()
+    if not release.is_version_compatible:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Incompatible extension version"
+        )
 
-    if not error_message:
-        delta = node_balance - total_balance
+    ext_info = InstallableExtension(
+        id=data.ext_id, name=data.ext_id, installed_release=release, icon=release.icon
+    )
+
+    ext_info.download_archive()
+
+    try:
+        ext_info.extract_archive()
+
+        extension = Extension.from_installable_ext(ext_info)
+
+        db_version = (await get_dbversions()).get(data.ext_id, 0)
+        await migrate_extension_database(extension, db_version)
+
+        await add_installed_extension(ext_info)
+
+        # call stop while the old routes are still active
+        await stop_extension_background_work(data.ext_id, user.id)
+
+        if data.ext_id not in settings.lnbits_deactivated_extensions:
+            settings.lnbits_deactivated_extensions += [data.ext_id]
+
+        # mount routes for the new version
+        core_app_extra.register_new_ext_routes(extension)
+
+        if extension.upgrade_hash:
+            ext_info.nofiy_upgrade()
+
+        return extension
+
+    except Exception as ex:
+        logger.warning(ex)
+        ext_info.clean_extension_files()
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=(
+                f"Failed to install extension {ext_info.id} "
+                f"({ext_info.installed_version})."
+            ),
+        )
+
+
+@core_app.delete("/api/v1/extension/{ext_id}")
+async def api_uninstall_extension(ext_id: str, user: User = Depends(check_admin)):
+    installable_extensions = await InstallableExtension.get_installable_extensions()
+
+    extensions = [e for e in installable_extensions if e.id == ext_id]
+    if len(extensions) == 0:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Unknown extension id: {ext_id}",
+        )
+
+    # check that other extensions do not depend on this one
+    for valid_ext_id in list(map(lambda e: e.code, get_valid_extensions())):
+        installed_ext = next(
+            (ext for ext in installable_extensions if ext.id == valid_ext_id), None
+        )
+        if installed_ext and ext_id in installed_ext.dependencies:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=(
+                    f"Cannot uninstall. Extension '{installed_ext.name}' "
+                    "depends on this one."
+                ),
+            )
+
+    try:
+        # call stop while the old routes are still active
+        await stop_extension_background_work(ext_id, user.id)
+
+        if ext_id not in settings.lnbits_deactivated_extensions:
+            settings.lnbits_deactivated_extensions += [ext_id]
+
+        for ext_info in extensions:
+            ext_info.clean_extension_files()
+            await delete_installed_extension(ext_id=ext_info.id)
+
+        logger.success(f"Extension '{ext_id}' uninstalled.")
+    except Exception as ex:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(ex)
+        )
+
+
+@core_app.get(
+    "/api/v1/extension/{ext_id}/releases", dependencies=[Depends(check_admin)]
+)
+async def get_extension_releases(ext_id: str):
+    try:
+        extension_releases: List[
+            ExtensionRelease
+        ] = await InstallableExtension.get_extension_releases(ext_id)
+
+        return extension_releases
+
+    except Exception as ex:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(ex)
+        )
+
+
+@core_app.get(
+    "/api/v1/extension/release/{org}/{repo}/{tag_name}",
+    dependencies=[Depends(check_admin)],
+)
+async def get_extension_release(org: str, repo: str, tag_name: str):
+    try:
+        config = await fetch_github_release_config(org, repo, tag_name)
+        if not config:
+            return {}
+
+        return {
+            "min_lnbits_version": config.min_lnbits_version,
+            "is_version_compatible": config.is_version_compatible(),
+            "warning": config.warning,
+        }
+    except Exception as ex:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(ex)
+        )
+
+
+@core_app.delete(
+    "/api/v1/extension/{ext_id}/db",
+    dependencies=[Depends(check_admin)],
+)
+async def delete_extension_db(ext_id: str):
+    try:
+        db_version = (await get_dbversions()).get(ext_id, None)
+        if not db_version:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=f"Unknown extension id: {ext_id}",
+            )
+        await drop_extension_db(ext_id=ext_id)
+        await delete_dbversion(ext_id=ext_id)
+        logger.success(f"Database removed for extension '{ext_id}'")
+    except HTTPException as ex:
+        logger.error(ex)
+        raise ex
+    except Exception as ex:
+        logger.error(ex)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Cannot delete data for extension '{ext_id}'",
+        )
+
+
+# TINYURL
+
+
+@core_app.post(
+    "/api/v1/tinyurl",
+    name="Tinyurl",
+    description="creates a tinyurl",
+)
+async def api_create_tinyurl(
+    url: str, endless: bool = False, wallet: WalletTypeInfo = Depends(get_key_type)
+):
+    tinyurls = await get_tinyurl_by_url(url)
+    try:
+        for tinyurl in tinyurls:
+            if tinyurl:
+                if tinyurl.wallet == wallet.wallet.inkey:
+                    return tinyurl
+        return await create_tinyurl(url, endless, wallet.wallet.inkey)
+    except Exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Unable to create tinyurl"
+        )
+
+
+@core_app.get(
+    "/api/v1/tinyurl/{tinyurl_id}",
+    name="Tinyurl",
+    description="get a tinyurl by id",
+)
+async def api_get_tinyurl(
+    tinyurl_id: str, wallet: WalletTypeInfo = Depends(get_key_type)
+):
+    try:
+        tinyurl = await get_tinyurl(tinyurl_id)
+        if tinyurl:
+            if tinyurl.wallet == wallet.wallet.inkey:
+                return tinyurl
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Wrong key provided."
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Unable to fetch tinyurl"
+        )
+
+
+@core_app.delete(
+    "/api/v1/tinyurl/{tinyurl_id}",
+    name="Tinyurl",
+    description="delete a tinyurl by id",
+)
+async def api_delete_tinyurl(
+    tinyurl_id: str, wallet: WalletTypeInfo = Depends(get_key_type)
+):
+    try:
+        tinyurl = await get_tinyurl(tinyurl_id)
+        if tinyurl:
+            if tinyurl.wallet == wallet.wallet.inkey:
+                await delete_tinyurl(tinyurl_id)
+                return {"deleted": True}
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Wrong key provided."
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Unable to delete"
+        )
+
+
+@core_app.get(
+    "/t/{tinyurl_id}",
+    name="Tinyurl",
+    description="redirects a tinyurl by id",
+)
+async def api_tinyurl(tinyurl_id: str):
+    tinyurl = await get_tinyurl(tinyurl_id)
+    if tinyurl:
+        response = RedirectResponse(url=tinyurl.url)
+        return response
     else:
-        node_balance, delta = None, None
-
-    return {
-        "node_balance_msats": node_balance,
-        "lnbits_balance_msats": total_balance,
-        "delta_msats": delta,
-        "timestamp": int(time.time()),
-    }
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="unable to find tinyurl"
+        )

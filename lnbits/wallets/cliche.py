@@ -1,12 +1,12 @@
 import asyncio
 import hashlib
 import json
-from os import getenv
-from typing import AsyncGenerator, Dict, Optional
+from typing import AsyncGenerator, Optional
 
-import httpx
 from loguru import logger
 from websocket import create_connection
+
+from lnbits.settings import settings
 
 from .base import (
     InvoiceResponse,
@@ -21,7 +21,9 @@ class ClicheWallet(Wallet):
     """https://github.com/fiatjaf/cliche"""
 
     def __init__(self):
-        self.endpoint = getenv("CLICHE_ENDPOINT")
+        self.endpoint = settings.cliche_endpoint
+        if not self.endpoint:
+            raise Exception("cannot initialize cliche")
 
     async def status(self) -> StatusResponse:
         try:
@@ -34,9 +36,9 @@ class ClicheWallet(Wallet):
             )
         try:
             data = json.loads(r)
-        except:
+        except Exception:
             return StatusResponse(
-                f"Failed to connect to {self.endpoint}, got: '{r.text[:200]}...'", 0
+                f"Failed to connect to {self.endpoint}, got: '{r[:200]}...'", 0
             )
 
         return StatusResponse(None, data["result"]["wallets"][0]["balance"])
@@ -47,18 +49,22 @@ class ClicheWallet(Wallet):
         memo: Optional[str] = None,
         description_hash: Optional[bytes] = None,
         unhashed_description: Optional[bytes] = None,
+        **kwargs,
     ) -> InvoiceResponse:
         if unhashed_description or description_hash:
             description_hash_str = (
                 description_hash.hex()
                 if description_hash
-                else hashlib.sha256(unhashed_description).hexdigest()
-                if unhashed_description
-                else None
+                else (
+                    hashlib.sha256(unhashed_description).hexdigest()
+                    if unhashed_description
+                    else None
+                )
             )
             ws = create_connection(self.endpoint)
             ws.send(
-                f"create-invoice --msatoshi {amount*1000} --description_hash {description_hash_str}"
+                f"create-invoice --msatoshi {amount*1000} --description_hash"
+                f" {description_hash_str}"
             )
             r = ws.recv()
         else:
@@ -88,6 +94,13 @@ class ClicheWallet(Wallet):
     async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
         ws = create_connection(self.endpoint)
         ws.send(f"pay-invoice --invoice {bolt11}")
+        checking_id, fee_msat, preimage, error_message, payment_ok = (
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
         for _ in range(2):
             r = ws.recv()
             data = json.loads(r)
@@ -150,19 +163,20 @@ class ClicheWallet(Wallet):
     async def paid_invoices_stream(self) -> AsyncGenerator[str, None]:
         while True:
             try:
-                ws = await create_connection(self.endpoint)
+                ws = create_connection(self.endpoint)
                 while True:
-                    r = await ws.recv()
+                    r = ws.recv()
                     data = json.loads(r)
                     print(data)
                     try:
                         if data["result"]["status"]:
                             yield data["result"]["payment_hash"]
-                    except:
+                    except Exception:
                         continue
             except Exception as exc:
                 logger.error(
-                    f"lost connection to cliche's invoices stream: '{exc}', retrying in 5 seconds"
+                    f"lost connection to cliche's invoices stream: '{exc}', retrying in"
+                    " 5 seconds"
                 )
                 await asyncio.sleep(5)
                 continue

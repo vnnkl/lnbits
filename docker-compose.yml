@@ -13,6 +13,7 @@ services:
     volumes:
       - lnbits-data:/app/data
       - ./orangepiller:/app/lnbits/extensions/orangepiller
+      - ./orangepiller:/app/orangepiller
 
 volumes:
   lnbits-data:

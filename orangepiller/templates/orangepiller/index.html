@@ -26,6 +26,16 @@
           <div class="col">
             <h5 class="text-subtitle1 q-my-none">Arrangements</h5>
           </div>
+          <div class="col-auto">
+            <q-btn
+              unelevated
+              color="primary"
+              icon="add"
+              label="Onboard Merchant"
+              @click="openOnboardDialog"
+              :disable="!selectedWallet"
+            ></q-btn>
+          </div>
         </div>
 
         <q-table
@@ -388,6 +398,136 @@
 
     <q-card-actions align="right">
       <q-btn flat label="Close" v-close-popup></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+<!-- Onboard Merchant Dialog -->
+<q-dialog v-model="showOnboardDialog" persistent>
+  <q-card style="min-width: 500px">
+    <q-card-section>
+      <div class="text-h6">
+        <q-icon name="person_add" class="q-mr-sm"></q-icon>
+        Onboard Merchant
+      </div>
+    </q-card-section>
+
+    <q-card-section class="q-pt-none">
+      <div class="text-subtitle2 q-mb-sm">Payback Settings</div>
+      <div class="row q-col-gutter-sm">
+        <div class="col-6">
+          <q-input
+            filled
+            dense
+            type="number"
+            v-model.number="onboardForm.total_debt_sats"
+            label="Total Debt (sats) *"
+            :rules="[val => val > 0 || 'Must be greater than 0']"
+          ></q-input>
+        </div>
+        <div class="col-6">
+          <q-input
+            filled
+            dense
+            type="number"
+            v-model.number="onboardForm.reroute_percent"
+            label="Reroute % *"
+            :rules="[val => val >= 1 && val <= 100 || '1-100']"
+          ></q-input>
+        </div>
+      </div>
+
+      <q-separator class="q-my-md"></q-separator>
+      <div class="text-subtitle2 q-mb-sm">Merchant Info</div>
+      <div class="row q-col-gutter-sm">
+        <div class="col-12">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.merchant_name"
+            label="Merchant Name"
+            hint="Appears on the TPoS terminal and poster"
+          ></q-input>
+        </div>
+      </div>
+
+      <q-separator class="q-my-md"></q-separator>
+      <div class="text-subtitle2 q-mb-sm">TPoS Terminal Settings</div>
+      <div class="row q-col-gutter-sm">
+        <div class="col-6">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.currency"
+            label="Currency"
+            hint="e.g. sat, USD, EUR"
+          ></q-input>
+        </div>
+        <div class="col-6">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.tip_options"
+            label="Tip Options"
+            hint='e.g. [10, 15, 20]'
+          ></q-input>
+        </div>
+        <div class="col-4">
+          <q-input
+            filled
+            dense
+            type="number"
+            v-model.number="onboardForm.tax_default"
+            label="Tax %"
+          ></q-input>
+        </div>
+        <div class="col-4">
+          <q-toggle
+            v-model="onboardForm.tax_inclusive"
+            label="Tax Inclusive"
+          ></q-toggle>
+        </div>
+      </div>
+
+      <q-separator class="q-my-md"></q-separator>
+      <div class="text-subtitle2 q-mb-sm">Business Details (optional)</div>
+      <div class="row q-col-gutter-sm">
+        <div class="col-12">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.business_name"
+            label="Business Name"
+          ></q-input>
+        </div>
+        <div class="col-8">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.business_address"
+            label="Business Address"
+          ></q-input>
+        </div>
+        <div class="col-4">
+          <q-input
+            filled
+            dense
+            v-model="onboardForm.business_vat_id"
+            label="VAT ID"
+          ></q-input>
+        </div>
+      </div>
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" v-close-popup :disable="onboardLoading"></q-btn>
+      <q-btn
+        unelevated
+        color="primary"
+        label="Onboard"
+        :loading="onboardLoading"
+        @click="createArrangement()"
+      ></q-btn>
     </q-card-actions>
   </q-card>
 </q-dialog>

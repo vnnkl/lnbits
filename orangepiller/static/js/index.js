@@ -14,6 +14,20 @@ window.app = Vue.createApp({
       forgiveArrangementId: '',
       showQrDialog: false,
       qrDialogUrl: '',
+      showOnboardDialog: false,
+      onboardForm: {
+        total_debt_sats: null,
+        reroute_percent: 50,
+        merchant_name: '',
+        currency: 'sat',
+        tip_options: '',
+        tax_default: 0,
+        tax_inclusive: true,
+        business_name: '',
+        business_address: '',
+        business_vat_id: ''
+      },
+      onboardLoading: false,
       columns: [
         {
           name: 'merchant_wallet',
@@ -170,6 +184,70 @@ window.app = Vue.createApp({
     showQr(url) {
       this.qrDialogUrl = url
       this.showQrDialog = true
+    },
+    openOnboardDialog() {
+      this.onboardForm = {
+        total_debt_sats: null,
+        reroute_percent: 50,
+        merchant_name: '',
+        currency: 'sat',
+        tip_options: '',
+        tax_default: 0,
+        tax_inclusive: true,
+        business_name: '',
+        business_address: '',
+        business_vat_id: ''
+      }
+      this.showOnboardDialog = true
+    },
+    createArrangement() {
+      if (!this.onboardForm.total_debt_sats || this.onboardForm.total_debt_sats <= 0) {
+        this.$q.notify({type: 'warning', message: 'Total debt must be greater than 0'})
+        return
+      }
+      if (this.onboardForm.reroute_percent < 1 || this.onboardForm.reroute_percent > 100) {
+        this.$q.notify({type: 'warning', message: 'Reroute percent must be between 1 and 100'})
+        return
+      }
+      this.onboardLoading = true
+      const payload = {
+        total_debt_sats: parseInt(this.onboardForm.total_debt_sats),
+        reroute_percent: parseInt(this.onboardForm.reroute_percent),
+        merchant_name: this.onboardForm.merchant_name || null,
+        currency: this.onboardForm.currency || 'sat',
+        tip_options: this.onboardForm.tip_options || null,
+        tax_default: parseFloat(this.onboardForm.tax_default) || 0,
+        tax_inclusive: this.onboardForm.tax_inclusive,
+        business_name: this.onboardForm.business_name || null,
+        business_address: this.onboardForm.business_address || null,
+        business_vat_id: this.onboardForm.business_vat_id || null
+      }
+      LNbits.api.request(
+          'POST',
+          '/orangepiller/api/v1/arrangements',
+          this.selectedWallet.adminkey,
+          payload
+        )
+        .then(response => {
+          this.showOnboardDialog = false
+          const arr = response.data
+          let msg = 'Merchant onboarded successfully!'
+          if (arr.warning) {
+            msg += ' ⚠️ ' + arr.warning
+          }
+          this.$q.notify({type: arr.warning ? 'warning' : 'positive', message: msg, timeout: 8000})
+          if (arr.merchant_credentials) {
+            LNbits.utils.copyText(arr.merchant_credentials)
+            this.$q.notify({type: 'info', message: 'Merchant login URL copied to clipboard', timeout: 4000})
+          }
+          this.getArrangements()
+        })
+        .catch(err => {
+          LNbits.utils.notifyApiError(err)
+        })
+        .finally(() => {
+          this.onboardLoading = false
+        })
     },
     _mapArrangement(a) {
       return {

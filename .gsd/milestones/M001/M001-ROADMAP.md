@@ -56,7 +56,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Extension scaffold + onboarding API** `risk:high` `depends:[]`
   > After this: Orange piller fills a form in the extension UI → merchant LNbits account created with extension auto-enabled, payback arrangement stored in DB. Verified via API and DB state.
 
-- [ ] **S02: Payment rerouting engine** `risk:high` `depends:[S01]`
+- [x] **S02: Payment rerouting engine** `risk:high` `depends:[S01]`
   > After this: Pay the merchant's wallet → configured percentage arrives in orange piller's wallet as internal transfer, debt decremented. Exact cap on final payment. Concurrency-safe. Verified by making real payments on a running LNbits instance.
 
 - [ ] **S03: Orange piller dashboard** `risk:low` `depends:[S01,S02]`

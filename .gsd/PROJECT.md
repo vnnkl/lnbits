@@ -10,7 +10,7 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 
 ## Current State
 
-S01 (Extension scaffold + onboarding API) is complete. The extension skeleton is built with all domain artifacts, CRUD layer, and onboarding API endpoints. S02 (Payment rerouting engine) is next.
+S01 (Extension scaffold + onboarding API) is complete. S02 (Payment rerouting engine) is complete — atomic debt tracking, internal transfers with rollback, 11 passing tests. S03 (Orange piller dashboard) is next.
 
 ## Architecture / Key Patterns
 

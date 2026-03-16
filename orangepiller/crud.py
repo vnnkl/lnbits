@@ -63,13 +63,61 @@ async def update_arrangement_repaid(
     arrangement_id: str,
     additional_sats: int,
 ) -> Optional[Arrangement]:
-    await db.execute(
-        "UPDATE orangepiller.arrangements"
-        " SET repaid_sats = repaid_sats + :sats"
-        " WHERE id = :id",
-        {"sats": additional_sats, "id": arrangement_id},
-    )
-    return await get_arrangement(arrangement_id)
+    """Atomically increment repaid_sats (capped at total_debt_sats) and
+    transition status to 'completed' when fully repaid.
+
+    Returns the updated Arrangement, or None if no active arrangement
+    was found (already completed or doesn't exist).
+    """
+    async with db.connect() as conn:
+        result = await conn.execute(
+            """
+            UPDATE orangepiller.arrangements
+            SET repaid_sats = CASE
+                    WHEN repaid_sats + :sats > total_debt_sats
+                        THEN total_debt_sats
+                    ELSE repaid_sats + :sats
+                END,
+                status = CASE
+                    WHEN repaid_sats + :sats >= total_debt_sats
+                        THEN 'completed'
+                    ELSE status
+                END
+            WHERE id = :id AND status = 'active'
+            """,
+            {"sats": additional_sats, "id": arrangement_id},
+        )
+        if result.rowcount == 0:  # type: ignore
+            return None
+        return await conn.fetchone(
+            "SELECT * FROM orangepiller.arrangements WHERE id = :id",
+            {"id": arrangement_id},
+            Arrangement,
+        )
+
+
+async def rollback_arrangement_repaid(
+    arrangement_id: str,
+    sats: int,
+) -> None:
+    """Roll back a debt update after a failed payment transfer.
+
+    Decrements repaid_sats by the given amount and resets status
+    to 'active' if it was set to 'completed'.
+    """
+    async with db.connect() as conn:
+        await conn.execute(
+            """
+            UPDATE orangepiller.arrangements
+            SET repaid_sats = CASE
+                    WHEN repaid_sats - :sats < 0 THEN 0
+                    ELSE repaid_sats - :sats
+                END,
+                status = 'active'
+            WHERE id = :id
+            """,
+            {"sats": sats, "id": arrangement_id},
+        )
 
 
 async def update_arrangement(

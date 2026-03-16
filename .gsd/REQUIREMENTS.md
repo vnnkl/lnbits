@@ -4,16 +4,20 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Active
 
+No active requirements — all M003 requirements validated.
+
+## Validated
+
 ### R012 — Fiat-denominated debt tracking
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Track the payback debt in a fiat currency (e.g. EUR, USD) with exchange rate conversion at spot rate on each incoming payment. The reroute percentage is applied to the fiat-equivalent of the payment, and the corresponding sat amount is transferred.
 - Why it matters: The orange piller pays the merchant in fiat — the debt should be denominated in fiat so neither party takes exchange rate risk on the principal amount.
 - Source: user
-- Primary owning slice: M003 (pending planning)
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Sat-denominated debts remain supported (backward-compatible). Exchange rates from LNbits built-in multi-provider service. Promoted from out-of-scope based on user decision to support fiat denomination.
+- Primary owning slice: M003/S01
+- Supporting slices: M003/S02
+- Validation: Dual-path reroute engine with spot conversion via satoshis_amount_as_fiat; 12 tests prove fiat path including cap, exact payoff, rate failure; dashboard shows fiat amounts; verified on Docker
+- Notes: Backward-compatible with sat debts (debt_currency="sat" uses existing path unchanged).
 
 ## Validated
 
@@ -210,14 +214,14 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ### R012 — Fiat-denominated debt tracking
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Track the payback debt in a fiat currency (e.g. EUR, USD) with exchange rate conversion at spot rate on each incoming payment.
 - Why it matters: The orange piller pays the merchant in fiat — the debt should be denominated in fiat so neither party takes exchange rate risk on the principal amount.
 - Source: user
-- Primary owning slice: M003 (pending planning)
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Promoted from out-of-scope to active. Sat debts remain backward-compatible.
+- Primary owning slice: M003/S01
+- Supporting slices: M003/S02
+- Validation: 12 fiat reroute tests + Docker verification
+- Notes: Promoted from out-of-scope → active → validated in M003.
 
 ### R013 — External Lightning destination for payback
 - Class: constraint
@@ -273,14 +277,14 @@ This file is the explicit capability and coverage contract for the Orange Piller
 | R105 | primary-user-loop | validated | M002/S02 | none | poster route 3 tests + print.html + qrcode |
 | R106 | primary-user-loop | validated | M002/S01 | M002/S02 | merchant_credentials URL + 2 tests |
 | R011 | differentiator | deferred | none | none | unmapped |
-| R012 | core-capability | active | M003 | none | unmapped |
+| R012 | core-capability | validated | M003/S01 | M003/S02 | 12 fiat tests + Docker |
 | R013 | constraint | out-of-scope | none | none | n/a |
 | R014 | anti-feature | out-of-scope | none | none | n/a |
 | R015 | constraint | out-of-scope | none | none | n/a |
 
 ## Coverage Summary
 
-- Active requirements: 1
+- Active requirements: 0
 - Mapped to slices: 0
-- Validated: 16
-- Unmapped active requirements: 1 (R012)
+- Validated: 17
+- Unmapped active requirements: 0

@@ -53,7 +53,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: Extension scaffold + onboarding API** `risk:high` `depends:[]`
+- [x] **S01: Extension scaffold + onboarding API** `risk:high` `depends:[]`
   > After this: Orange piller fills a form in the extension UI → merchant LNbits account created with extension auto-enabled, payback arrangement stored in DB. Verified via API and DB state.
 
 - [ ] **S02: Payment rerouting engine** `risk:high` `depends:[S01]`

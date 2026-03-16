@@ -6,11 +6,6 @@
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? |
 |---|------|-------|----------|--------|-----------|------------|
-| D001 | M001 | arch | Debt denomination | Sats | No exchange rate dependencies, simpler tracking, user preference | No |
-| D002 | M001 | arch | Payback destination | Same LNbits instance (internal transfer) | Instant, free, can't fail due to routing. User preference | Yes — if external wallets needed |
-| D003 | M001 | arch | Extension repo location | Standalone repo (like splitpayments) | LNbits convention for distributable extensions | No |
-| D004 | M001 | pattern | Payment interception pattern | register_invoice_listener + asyncio.Queue | Proven pattern used by splitpayments, official LNbits mechanism | No |
-| D005 | M001 | convention | Extension code identifier | orangepiller | Lowercase alphanumeric, no dashes — LNbits convention | No |
-| D006 | M001 | arch | Account creation method | create_user_account_no_ckeck with default_exts | Core service that handles account + wallet + extension activation atomically | No |
-| D007 | M001 | scope | Merchant dispute mechanism | Not implemented | Merchant accepted cash upfront — nothing to dispute. User decision | No |
-| D008 | M001 | scope | Store map listing | Deferred | Not needed in first version per user. Could be separate extension | Yes — future milestone |
+| 1 | 2026-03-16 | M001/S01 | Extension code identifier | `orangepiller` (lowercase, no dashes) | LNbits convention for extension IDs — used in DB schema prefix, router prefix, static file paths, and `default_exts` parameter | No |
+| 2 | 2026-03-16 | M001/S01 | CRUD update pattern | `update_arrangement` accepts `**kwargs` for flexible field updates | Allows T02/S04 to update any combination of fields without creating separate update functions per field | Yes |
+| 3 | 2026-03-16 | M001/S01 | Pydantic v1 computed properties | `@property` for `remaining_debt`, `progress_percent`, `is_completed` | Pydantic v1 doesn't support `@computed_field`; properties work but aren't included in `.dict()` serialization — API responses must add them explicitly if needed | Yes |

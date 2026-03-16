@@ -1,0 +1,7 @@
+{
+  "name": "Orange Piller",
+  "short_description": "Onboard merchants to Bitcoin with managed LNbits accounts and payback arrangements",
+  "tile": "/orangepiller/static/bitcoin-extension.png",
+  "min_lnbits_version": "1.0.0",
+  "contributors": []
+}

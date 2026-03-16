@@ -10,7 +10,7 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 
 ## Current State
 
-Greenfield. No code exists yet. The extension will be built as a standalone repo following the LNbits extension pattern (like splitpayments). The target LNbits version is 1.5.x (current dev branch).
+S01 (Extension scaffold + onboarding API) is complete. The extension skeleton is built with all domain artifacts, CRUD layer, and onboarding API endpoints. S02 (Payment rerouting engine) is next.
 
 ## Architecture / Key Patterns
 

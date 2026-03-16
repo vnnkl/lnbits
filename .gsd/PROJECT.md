@@ -51,3 +51,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 
 - [x] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management. All 10 requirements validated. 20 tests pass.
 - [x] M002: Merchant Activation Kit — TPoS auto-provisioning, extended onboarding, dashboard QR codes, merchant credentials, and printable poster. All 6 requirements validated. 32 tests pass.
+- [ ] M003: Fiat-Denominated Debt Tracking — Track debt in fiat currency (EUR, USD, etc.) with spot-rate conversion on each payment. Backward-compatible with existing sat-denominated debts.

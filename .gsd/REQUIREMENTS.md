@@ -4,7 +4,16 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Active
 
-No active requirements — all M002 requirements validated.
+### R012 — Fiat-denominated debt tracking
+- Class: core-capability
+- Status: active
+- Description: Track the payback debt in a fiat currency (e.g. EUR, USD) with exchange rate conversion at spot rate on each incoming payment. The reroute percentage is applied to the fiat-equivalent of the payment, and the corresponding sat amount is transferred.
+- Why it matters: The orange piller pays the merchant in fiat — the debt should be denominated in fiat so neither party takes exchange rate risk on the principal amount.
+- Source: user
+- Primary owning slice: M003 (pending planning)
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Sat-denominated debts remain supported (backward-compatible). Exchange rates from LNbits built-in multi-provider service. Promoted from out-of-scope based on user decision to support fiat denomination.
 
 ## Validated
 
@@ -200,15 +209,15 @@ No active requirements — all M002 requirements validated.
 ## Out of Scope
 
 ### R012 — Fiat-denominated debt tracking
-- Class: constraint
-- Status: out-of-scope
-- Description: Tracking the payback debt in fiat (EUR) with exchange rate conversion on each payment.
-- Why it matters: Prevents scope confusion — debt is tracked in sats, period.
+- Class: core-capability
+- Status: active
+- Description: Track the payback debt in a fiat currency (e.g. EUR, USD) with exchange rate conversion at spot rate on each incoming payment.
+- Why it matters: The orange piller pays the merchant in fiat — the debt should be denominated in fiat so neither party takes exchange rate risk on the principal amount.
 - Source: user
-- Primary owning slice: none
+- Primary owning slice: M003 (pending planning)
 - Supporting slices: none
-- Validation: n/a
-- Notes: User chose sats-denominated tracking. No exchange rate dependencies.
+- Validation: unmapped
+- Notes: Promoted from out-of-scope to active. Sat debts remain backward-compatible.
 
 ### R013 — External Lightning destination for payback
 - Class: constraint
@@ -264,14 +273,14 @@ No active requirements — all M002 requirements validated.
 | R105 | primary-user-loop | validated | M002/S02 | none | poster route 3 tests + print.html + qrcode |
 | R106 | primary-user-loop | validated | M002/S01 | M002/S02 | merchant_credentials URL + 2 tests |
 | R011 | differentiator | deferred | none | none | unmapped |
-| R012 | constraint | out-of-scope | none | none | n/a |
+| R012 | core-capability | active | M003 | none | unmapped |
 | R013 | constraint | out-of-scope | none | none | n/a |
 | R014 | anti-feature | out-of-scope | none | none | n/a |
 | R015 | constraint | out-of-scope | none | none | n/a |
 
 ## Coverage Summary
 
-- Active requirements: 0
+- Active requirements: 1
 - Mapped to slices: 0
 - Validated: 16
-- Unmapped active requirements: 0
+- Unmapped active requirements: 1 (R012)

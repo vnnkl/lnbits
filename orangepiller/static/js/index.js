@@ -148,6 +148,19 @@ window.app = Vue.createApp({
         )
       }
     },
+    _detectCompletionTransitions(oldList, newList, labelFn) {
+      const oldStatusById = {}
+      oldList.forEach(a => { oldStatusById[a.id] = a.status })
+      newList.forEach(a => {
+        if (a.status === 'completed' && oldStatusById[a.id] && oldStatusById[a.id] !== 'completed') {
+          this.$q.notify({
+            type: 'positive',
+            message: labelFn(a),
+            timeout: 5000
+          })
+        }
+      })
+    },
     getArrangements() {
       if (!this.selectedWallet) return
       this.loading = true
@@ -157,7 +170,12 @@ window.app = Vue.createApp({
           this.selectedWallet.adminkey
         )
         .then(response => {
-          this.arrangements = response.data.map(a => this._mapArrangement(a))
+          const newList = response.data.map(a => this._mapArrangement(a))
+          this._detectCompletionTransitions(
+            this.arrangements, newList,
+            a => 'Arrangement completed! Debt fully repaid for merchant ' + a.merchant_wallet
+          )
+          this.arrangements = newList
         })
         .catch(err => {
           LNbits.utils.notifyApiError(err)
@@ -175,7 +193,12 @@ window.app = Vue.createApp({
           this.selectedWallet.adminkey
         )
         .then(response => {
-          this.merchantArrangements = response.data.map(a => this._mapArrangement(a))
+          const newList = response.data.map(a => this._mapArrangement(a))
+          this._detectCompletionTransitions(
+            this.merchantArrangements, newList,
+            a => 'Arrangement completed! Debt fully repaid by ' + a.orange_piller_wallet
+          )
+          this.merchantArrangements = newList
         })
         .catch(err => {
           // 404 or empty is expected when wallet is not a merchant

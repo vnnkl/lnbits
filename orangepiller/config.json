@@ -1,7 +1,12 @@
 {
   "name": "Orange Piller",
   "short_description": "Onboard merchants to Bitcoin with managed LNbits accounts and payback arrangements",
-  "tile": "/orangepiller/static/bitcoin-extension.png",
-  "min_lnbits_version": "1.0.0",
-  "contributors": []
+  "tile": "/orangepiller/static/image/orange-piller.png",
+  "version": "0.1.0",
+  "min_lnbits_version": "1.3.0",
+  "contributors": [],
+  "images": [],
+  "description_md": "https://raw.githubusercontent.com/lnbits/orangepiller/main/description.md",
+  "terms_and_conditions_md": "https://raw.githubusercontent.com/lnbits/orangepiller/main/toc.md",
+  "license": "MIT"
 }

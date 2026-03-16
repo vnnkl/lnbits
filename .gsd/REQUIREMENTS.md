@@ -81,42 +81,40 @@ This file is the explicit capability and coverage contract for the Orange Piller
 - Validation: unmapped
 - Notes: No merchant-side dispute mechanism — merchant accepted cash upfront.
 
+## Validated
+
 ### R008 — Clean cutover
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: When the debt reaches zero, rerouting stops automatically. The merchant's LNbits works normally with no payment interception.
 - Why it matters: The arrangement has a clear end — the merchant isn't locked into perpetual splits.
 - Source: user
 - Primary owning slice: M001/S05
 - Supporting slices: M001/S02
-- Validation: unmapped
+- Validation: 3 cutover tests prove debt-zero → completed → skip path (test_cutover.py)
 - Notes: Arrangement status transitions from "active" to "completed". The extension remains installed but becomes transparent.
 
 ### R009 — Standalone extension packaging
 - Class: launchability
-- Status: active
+- Status: validated
 - Description: Extension is a standalone GitHub repo with config.json, manifest.json, installable via LNbits extension manager.
 - Why it matters: Must be distributable as a standard LNbits extension — not a core patch.
 - Source: user
 - Primary owning slice: M001/S05
 - Supporting slices: M001/S01
-- Validation: unmapped
+- Validation: config.json validates with all required fields; tile/README/LICENSE/description.md present. Install-from-GitHub deferred to UAT.
 - Notes: Follow splitpayments/example extension repo structure exactly.
 
 ### R010 — Repayment completion signal
 - Class: failure-visibility
-- Status: active
+- Status: validated
 - Description: When debt is fully repaid, both orange piller and merchant see a visual status change. Notification if easy to implement.
 - Why it matters: Both parties need to know the arrangement is done.
 - Source: user
 - Primary owning slice: M001/S05
 - Supporting slices: none
-- Validation: unmapped
+- Validation: Toast notification code present in JS with transition-aware detection; status chips show completion state. Visual verification deferred to UAT.
 - Notes: At minimum a status change on both dashboards. Push notification or in-app notification as stretch.
-
-## Validated
-
-(none yet)
 
 ## Deferred
 
@@ -177,9 +175,9 @@ This file is the explicit capability and coverage contract for the Orange Piller
 | R005 | primary-user-loop | active | M001/S03 | none | unmapped |
 | R006 | primary-user-loop | active | M001/S04 | none | unmapped |
 | R007 | core-capability | active | M001/S04 | none | unmapped |
-| R008 | core-capability | active | M001/S05 | M001/S02 | unmapped |
-| R009 | launchability | active | M001/S05 | M001/S01 | unmapped |
-| R010 | failure-visibility | active | M001/S05 | none | unmapped |
+| R008 | core-capability | validated | M001/S05 | M001/S02 | test_cutover.py |
+| R009 | launchability | validated | M001/S05 | M001/S01 | config.json + artifacts |
+| R010 | failure-visibility | validated | M001/S05 | none | toast notification code |
 | R011 | differentiator | deferred | none | none | unmapped |
 | R012 | constraint | out-of-scope | none | none | n/a |
 | R013 | constraint | out-of-scope | none | none | n/a |
@@ -187,7 +185,7 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Coverage Summary
 
-- Active requirements: 10
-- Mapped to slices: 10
-- Validated: 0
+- Active requirements: 7
+- Mapped to slices: 7
+- Validated: 3
 - Unmapped active requirements: 0

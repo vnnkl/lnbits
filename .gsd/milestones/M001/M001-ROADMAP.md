@@ -65,7 +65,7 @@ This milestone is complete only when all are true:
 - [x] **S04: Merchant view + arrangement management** `risk:low` `depends:[S01,S02]`
   > After this: Merchant sees their payback arrangement details from their own LNbits. Orange piller can adjust reroute percentage and forgive remaining debt from the dashboard.
 
-- [ ] **S05: Clean cutover, notifications & packaging** `risk:low` `depends:[S02,S03,S04]`
+- [x] **S05: Clean cutover, notifications & packaging** `risk:low` `depends:[S02,S03,S04]`
   > After this: Debt reaches zero → rerouting stops automatically, status changes to "completed" on both dashboards. Extension repo has config.json + manifest.json and is installable from GitHub.
 
 ## Boundary Map

@@ -10,7 +10,7 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 
 ## Current State
 
-S01 (Extension scaffold + onboarding API) is complete. S02 (Payment rerouting engine) is complete — atomic debt tracking, internal transfers with rollback, 11 passing tests. S03 (Orange piller dashboard) is complete — Quasar table with progress bars, status badges, computed fields. S04 (Merchant view + arrangement management) is complete — merchant transparency view, edit/forgive management controls with authorized PUT endpoint. S05 (Clean cutover, notifications & packaging) is next.
+S01 (Extension scaffold + onboarding API) is complete. S02 (Payment rerouting engine) is complete — atomic debt tracking, internal transfers with rollback, 11 passing tests. S03 (Orange piller dashboard) is complete — Quasar table with progress bars, status badges, computed fields. S04 (Merchant view + arrangement management) is complete — merchant transparency view, edit/forgive management controls with authorized PUT endpoint. S05 (Clean cutover, notifications & packaging) is complete — cutover tests pass, toast notifications on both dashboards, extension packaging with config.json/tile/README/LICENSE. All 5 slices complete. Milestone M001 ready for UAT.
 
 ## Architecture / Key Patterns
 

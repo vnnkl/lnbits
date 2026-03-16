@@ -1,0 +1,18 @@
+services:
+  lnbits:
+    build: .
+    ports:
+      - "5001:5000"
+    environment:
+      - LNBITS_BACKEND_WALLET_CLASS=FakeWallet
+      - FAKE_WALLET_SECRET=ToTheMoon1
+      - LNBITS_ADMIN_UI=true
+      - LNBITS_EXTENSIONS_DEFAULT_INSTALL=tpos
+      - LNBITS_USER_DEFAULT_EXTENSIONS=
+      - DEBUG=true
+    volumes:
+      - lnbits-data:/app/data
+      - ./orangepiller:/app/lnbits/extensions/orangepiller
+
+volumes:
+  lnbits-data:

@@ -50,10 +50,10 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: Fiat reroute engine and data model** `risk:high` `depends:[]`
+- [x] **S01: Fiat reroute engine and data model** `risk:high` `depends:[]`
   > After this: a fiat-denominated arrangement can be created via the API, and incoming payments are converted at spot rate and rerouted with fiat debt tracking — proven by unit tests with mocked exchange rates.
 
-- [ ] **S02: Dashboard fiat display and onboarding form** `risk:low` `depends:[S01]`
+- [x] **S02: Dashboard fiat display and onboarding form** `risk:low` `depends:[S01]`
   > After this: the onboarding form allows selecting a fiat currency and entering a fiat debt amount; both dashboards display fiat debt, repaid amount, remaining balance, and progress with currency symbols; the full flow is verified on the live Docker instance.
 
 ## Boundary Map

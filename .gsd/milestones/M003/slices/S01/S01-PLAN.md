@@ -41,21 +41,21 @@
 
 ## Tasks
 
-- [ ] **T01: Fiat data model, migration, and CRUD** `est:25m`
+- [x] **T01: Fiat data model, migration, and CRUD** `est:25m`
   - Why: Foundation — all fiat tracking depends on having the fields, migration, and CRUD operations
   - Files: `orangepiller/models.py`, `orangepiller/migrations.py`, `orangepiller/crud.py`, `orangepiller/views_api.py`
   - Do: Add `debt_currency` (str, default "sat"), `total_debt_fiat` (Optional[float]), `repaid_fiat` (float, default 0) to `Arrangement`. Add `debt_currency` and `total_debt_fiat` to `CreateArrangement`. Write `m003_fiat_fields` migration (3 ALTER TABLE ADD COLUMN). Add `update_arrangement_repaid_fiat(id, fiat_amount)` with atomic SQL cap at `total_debt_fiat` and status transition. Add `rollback_arrangement_repaid_fiat(id, fiat_amount)`. Update `create_arrangement()` to store fiat fields. Add computed `remaining_debt_fiat` property. Make `progress_percent` aware of `debt_currency`. Update POST handler to accept fiat fields and set `total_debt_sats=0` when `debt_currency != "sat"`.
   - Verify: `pytest tests/extensions/orangepiller/ -v` — all 32 existing tests still pass; manual import check of new CRUD functions
   - Done when: Arrangement model has all fiat fields, migration exists, CRUD fiat functions work, POST endpoint accepts fiat arrangements
 
-- [ ] **T02: Fiat reroute engine path** `est:25m`
+- [x] **T02: Fiat reroute engine path** `est:25m`
   - Why: The core mechanic — without this, fiat debt never gets repaid
   - Files: `orangepiller/tasks.py`
   - Do: In `on_invoice_paid`, after the status check, branch on `arrangement.debt_currency`. If "sat", run existing path unchanged. If fiat: call `satoshis_amount_as_fiat(payment.sat, arrangement.debt_currency)` to get fiat value of payment. Apply `reroute_percent` to get fiat reroute amount. Cap at `arrangement.remaining_debt_fiat`. Convert fiat reroute amount back to sats via `fiat_amount_as_satoshis`. Call `update_arrangement_repaid_fiat` atomically. Transfer sats via `create_invoice` + `pay_invoice`. Rollback fiat on transfer failure. Wrap exchange rate call in try/except ValueError — on failure, log warning and return (skip reroute). Log the exchange rate, fiat amount, and sat equivalent on success.
   - Verify: `pytest tests/extensions/orangepiller/test_fiat_reroute.py -v`
   - Done when: Fiat reroute path converts, transfers, and decrements correctly; exchange rate failure skips cleanly
 
-- [ ] **T03: Fiat reroute tests** `est:20m`
+- [x] **T03: Fiat reroute tests** `est:20m`
   - Why: Prove the fiat path works correctly under all edge cases
   - Files: `tests/extensions/orangepiller/test_fiat_reroute.py`
   - Do: Write tests with mocked `satoshis_amount_as_fiat` and `fiat_amount_as_satoshis`: (1) fiat reroute happy path — 1000 sat payment at mocked rate → correct fiat decrement and sat transfer, (2) fiat cap at remaining debt — payment fiat-equivalent exceeds remaining → capped, (3) fiat exact payoff → debt reaches zero → status "completed", (4) exchange rate failure → ValueError raised → reroute skipped, merchant keeps payment, (5) sat arrangement backward compat → existing sat path unchanged when debt_currency="sat", (6) fiat precision — simulate 50 small payments that sum to the total debt, verify repaid_fiat matches total_debt_fiat exactly

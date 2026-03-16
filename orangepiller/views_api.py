@@ -38,11 +38,18 @@ async def api_create_arrangement(
     extension auto-enabled), extracts the wallet ID, conditionally
     provisions a TPoS terminal, and stores the payback arrangement.
     """
-    if data.total_debt_sats <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="total_debt_sats must be greater than 0",
-        )
+    if data.debt_currency == "sat":
+        if data.total_debt_sats <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="total_debt_sats must be greater than 0",
+            )
+    else:
+        if not data.total_debt_fiat or data.total_debt_fiat <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="total_debt_fiat must be greater than 0 for fiat debt",
+            )
     if not (1 <= data.reroute_percent <= 100):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,11 +211,13 @@ async def api_update_arrangement(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot forgive a completed arrangement",
             )
-        updated = await update_arrangement(
-            arrangement_id,
-            repaid_sats=arrangement.total_debt_sats,
-            status="completed",
-        )
+        forgive_kwargs = {
+            "repaid_sats": arrangement.total_debt_sats,
+            "status": "completed",
+        }
+        if arrangement.debt_currency != "sat" and arrangement.total_debt_fiat:
+            forgive_kwargs["repaid_fiat"] = arrangement.total_debt_fiat
+        updated = await update_arrangement(arrangement_id, **forgive_kwargs)
         logger.info(
             f"Arrangement updated: id={arrangement_id}, "
             f"action=forgive, repaid_sats={arrangement.total_debt_sats}"

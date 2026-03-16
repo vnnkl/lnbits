@@ -31,6 +31,9 @@ async def create_arrangement(
         tpos_url=tpos_url,
         merchant_name=data.merchant_name,
         merchant_credentials=merchant_credentials,
+        debt_currency=data.debt_currency,
+        total_debt_fiat=data.total_debt_fiat,
+        repaid_fiat=0,
     )
     await db.insert("orangepiller.arrangements", arrangement)
     return arrangement
@@ -103,6 +106,43 @@ async def update_arrangement_repaid(
         )
 
 
+async def update_arrangement_repaid_fiat(
+    arrangement_id: str,
+    additional_fiat: float,
+) -> Optional[Arrangement]:
+    """Atomically increment repaid_fiat (capped at total_debt_fiat) and
+    transition status to 'completed' when fully repaid.
+
+    Returns the updated Arrangement, or None if no active arrangement
+    was found (already completed or doesn't exist).
+    """
+    async with db.connect() as conn:
+        result = await conn.execute(
+            """
+            UPDATE orangepiller.arrangements
+            SET repaid_fiat = CASE
+                    WHEN repaid_fiat + :fiat > total_debt_fiat
+                        THEN total_debt_fiat
+                    ELSE repaid_fiat + :fiat
+                END,
+                status = CASE
+                    WHEN repaid_fiat + :fiat >= total_debt_fiat
+                        THEN 'completed'
+                    ELSE status
+                END
+            WHERE id = :id AND status = 'active'
+            """,
+            {"fiat": additional_fiat, "id": arrangement_id},
+        )
+        if result.rowcount == 0:  # type: ignore
+            return None
+        return await conn.fetchone(
+            "SELECT * FROM orangepiller.arrangements WHERE id = :id",
+            {"id": arrangement_id},
+            Arrangement,
+        )
+
+
 async def rollback_arrangement_repaid(
     arrangement_id: str,
     sats: int,
@@ -124,6 +164,30 @@ async def rollback_arrangement_repaid(
             WHERE id = :id
             """,
             {"sats": sats, "id": arrangement_id},
+        )
+
+
+async def rollback_arrangement_repaid_fiat(
+    arrangement_id: str,
+    fiat_amount: float,
+) -> None:
+    """Roll back a fiat debt update after a failed payment transfer.
+
+    Decrements repaid_fiat by the given amount and resets status
+    to 'active' if it was set to 'completed'.
+    """
+    async with db.connect() as conn:
+        await conn.execute(
+            """
+            UPDATE orangepiller.arrangements
+            SET repaid_fiat = CASE
+                    WHEN repaid_fiat - :fiat < 0 THEN 0
+                    ELSE repaid_fiat - :fiat
+                END,
+                status = 'active'
+            WHERE id = :id
+            """,
+            {"fiat": fiat_amount, "id": arrangement_id},
         )
 
 

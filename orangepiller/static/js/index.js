@@ -16,7 +16,7 @@ window.app = Vue.createApp({
       qrDialogUrl: '',
       showOnboardDialog: false,
       onboardForm: {
-        total_debt_sats: null,
+        debt_amount: null,
         reroute_percent: 50,
         merchant_name: '',
         currency: 'sat',
@@ -27,6 +27,7 @@ window.app = Vue.createApp({
         business_address: '',
         business_vat_id: ''
       },
+      currencyOptions: ['sat', 'USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'BRL', 'MXN'],
       onboardLoading: false,
       columns: [
         {
@@ -59,22 +60,22 @@ window.app = Vue.createApp({
         },
         {
           name: 'total_debt_sats',
-          label: 'Total Debt (sats)',
-          field: 'total_debt_sats',
+          label: 'Total Debt',
+          field: 'debt_display',
           align: 'right',
           sortable: true
         },
         {
           name: 'repaid_sats',
-          label: 'Repaid (sats)',
-          field: 'repaid_sats',
+          label: 'Repaid',
+          field: 'repaid_display',
           align: 'right',
           sortable: true
         },
         {
           name: 'remaining_debt',
-          label: 'Remaining (sats)',
-          field: 'remaining_debt',
+          label: 'Remaining',
+          field: 'remaining_display',
           align: 'right',
           sortable: true
         },
@@ -131,22 +132,22 @@ window.app = Vue.createApp({
         },
         {
           name: 'total_debt_sats',
-          label: 'Total Debt (sats)',
-          field: 'total_debt_sats',
+          label: 'Total Debt',
+          field: 'debt_display',
           align: 'right',
           sortable: true
         },
         {
           name: 'repaid_sats',
-          label: 'Repaid (sats)',
-          field: 'repaid_sats',
+          label: 'Repaid',
+          field: 'repaid_display',
           align: 'right',
           sortable: true
         },
         {
           name: 'remaining_debt',
-          label: 'Remaining (sats)',
-          field: 'remaining_debt',
+          label: 'Remaining',
+          field: 'remaining_display',
           align: 'right',
           sortable: true
         },
@@ -187,7 +188,7 @@ window.app = Vue.createApp({
     },
     openOnboardDialog() {
       this.onboardForm = {
-        total_debt_sats: null,
+        debt_amount: null,
         reroute_percent: 50,
         merchant_name: '',
         currency: 'sat',
@@ -201,8 +202,8 @@ window.app = Vue.createApp({
       this.showOnboardDialog = true
     },
     createArrangement() {
-      if (!this.onboardForm.total_debt_sats || this.onboardForm.total_debt_sats <= 0) {
-        this.$q.notify({type: 'warning', message: 'Total debt must be greater than 0'})
+      if (!this.onboardForm.debt_amount || this.onboardForm.debt_amount <= 0) {
+        this.$q.notify({type: 'warning', message: 'Debt amount must be greater than 0'})
         return
       }
       if (this.onboardForm.reroute_percent < 1 || this.onboardForm.reroute_percent > 100) {
@@ -210,8 +211,11 @@ window.app = Vue.createApp({
         return
       }
       this.onboardLoading = true
+      const isSat = this.onboardForm.currency === 'sat'
       const payload = {
-        total_debt_sats: parseInt(this.onboardForm.total_debt_sats),
+        total_debt_sats: isSat ? parseInt(this.onboardForm.debt_amount) : 0,
+        total_debt_fiat: isSat ? null : parseFloat(this.onboardForm.debt_amount),
+        debt_currency: this.onboardForm.currency,
         reroute_percent: parseInt(this.onboardForm.reroute_percent),
         merchant_name: this.onboardForm.merchant_name || null,
         currency: this.onboardForm.currency || 'sat',
@@ -250,14 +254,34 @@ window.app = Vue.createApp({
         })
     },
     _mapArrangement(a) {
+      const isFiat = a.debt_currency && a.debt_currency !== 'sat'
+      let remaining, progress, debtDisplay, repaidDisplay, remainingDisplay
+      if (isFiat) {
+        remaining = (a.total_debt_fiat || 0) - (a.repaid_fiat || 0)
+        if (remaining < 0) remaining = 0
+        progress = a.total_debt_fiat > 0
+          ? ((a.repaid_fiat || 0) / a.total_debt_fiat * 100).toFixed(2)
+          : '100.00'
+        debtDisplay = a.total_debt_fiat.toFixed(2) + ' ' + a.debt_currency
+        repaidDisplay = (a.repaid_fiat || 0).toFixed(2) + ' ' + a.debt_currency
+        remainingDisplay = remaining.toFixed(2) + ' ' + a.debt_currency
+      } else {
+        remaining = a.total_debt_sats - a.repaid_sats
+        if (remaining < 0) remaining = 0
+        progress = a.total_debt_sats > 0
+          ? (a.repaid_sats / a.total_debt_sats * 100).toFixed(2)
+          : '100.00'
+        debtDisplay = a.total_debt_sats.toLocaleString() + ' sats'
+        repaidDisplay = a.repaid_sats.toLocaleString() + ' sats'
+        remainingDisplay = remaining.toLocaleString() + ' sats'
+      }
       return {
         ...a,
-        remaining_debt: a.total_debt_sats - a.repaid_sats,
-        progress_percent: (
-          a.total_debt_sats > 0
-            ? (a.repaid_sats / a.total_debt_sats * 100).toFixed(2)
-            : '100.00'
-        )
+        remaining_debt: remaining,
+        progress_percent: progress,
+        debt_display: debtDisplay,
+        repaid_display: repaidDisplay,
+        remaining_display: remainingDisplay
       }
     },
     _detectCompletionTransitions(oldList, newList, labelFn) {

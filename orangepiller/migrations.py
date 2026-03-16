@@ -38,3 +38,21 @@ async def m002_tpos_fields(db: Connection):
     await db.execute(
         "ALTER TABLE orangepiller.arrangements ADD COLUMN merchant_credentials TEXT DEFAULT NULL"
     )
+
+
+async def m003_fiat_fields(db: Connection):
+    """
+    Add fiat-denominated debt tracking fields to arrangements table.
+    """
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements"
+        " ADD COLUMN debt_currency TEXT DEFAULT 'sat'"
+    )
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements"
+        " ADD COLUMN total_debt_fiat REAL DEFAULT NULL"
+    )
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements"
+        " ADD COLUMN repaid_fiat REAL DEFAULT 0"
+    )

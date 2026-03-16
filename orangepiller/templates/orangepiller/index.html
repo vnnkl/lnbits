@@ -406,17 +406,29 @@
     <q-card-section class="q-pt-none">
       <div class="text-subtitle2 q-mb-sm">Payback Settings</div>
       <div class="row q-col-gutter-sm">
-        <div class="col-6">
+        <div class="col-4">
+          <q-select
+            filled
+            dense
+            v-model="onboardForm.currency"
+            :options="currencyOptions"
+            label="Currency *"
+            use-input
+            new-value-mode="add-unique"
+            hint="sat, USD, EUR, etc."
+          ></q-select>
+        </div>
+        <div class="col-4">
           <q-input
             filled
             dense
             type="number"
-            v-model.number="onboardForm.total_debt_sats"
-            label="Total Debt (sats) *"
+            v-model.number="onboardForm.debt_amount"
+            :label="onboardForm.currency === 'sat' ? 'Total Debt (sats) *' : 'Total Debt (' + onboardForm.currency + ') *'"
             :rules="[val => val > 0 || 'Must be greater than 0']"
           ></q-input>
         </div>
-        <div class="col-6">
+        <div class="col-4">
           <q-input
             filled
             dense
@@ -449,21 +461,12 @@
           <q-input
             filled
             dense
-            v-model="onboardForm.currency"
-            label="Currency"
-            hint="e.g. sat, USD, EUR"
-          ></q-input>
-        </div>
-        <div class="col-6">
-          <q-input
-            filled
-            dense
             v-model="onboardForm.tip_options"
             label="Tip Options"
             hint='e.g. [10, 15, 20]'
           ></q-input>
         </div>
-        <div class="col-4">
+        <div class="col-3">
           <q-input
             filled
             dense
@@ -472,7 +475,7 @@
             label="Tax %"
           ></q-input>
         </div>
-        <div class="col-4">
+        <div class="col-3">
           <q-toggle
             v-model="onboardForm.tax_inclusive"
             label="Tax Inclusive"

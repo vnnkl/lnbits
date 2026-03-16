@@ -10,28 +10,24 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 
 ## Current State
 
-**Milestone M001 (Orange Piller Extension) is complete.** All 5 slices delivered. All 10 requirements validated. 20/20 tests pass. Extension is structurally complete with full packaging for GitHub installation.
+**Milestones M001 and M002 are complete.** All 16 requirements validated. 32/32 tests pass. Extension delivers the full orange-pilling workflow from merchant onboarding through payment rerouting to activation kit (TPoS terminal, QR codes, printable poster).
 
 **What's built:**
 - Atomic merchant onboarding (account + wallet + arrangement in one API call)
 - Payment rerouting engine with concurrency-safe debt tracking and rollback
-- Orange piller dashboard with progress bars, status badges, and management controls
-- Merchant transparency view with arrangement details
+- Orange piller dashboard with progress bars, status badges, management controls, TPoS links, QR codes, and merchant credentials
+- Merchant transparency view with arrangement details and TPoS link
 - Arrangement management (adjust reroute %, forgive debt)
 - Clean cutover (debt → zero → completed → rerouting stops)
 - Toast notifications on both dashboards for completion transitions
-- Extension packaging (config.json, manifest.json, tile, README, LICENSE)
-
-**M002 (Merchant Activation Kit) S01 complete.** TPoS auto-provisioning during onboarding, extended onboarding fields, merchant credential surfacing, and graceful degradation — proven by 9 new tests (29 total). S02 (dashboards, QR codes, printable poster) is next.
-
-**What was added in S01:**
 - TPoS auto-provisioning via cross-extension httpx call during onboarding
 - Extended onboarding with merchant name, currency, tip/tax settings, business info
-- Merchant login credentials (login URL) surfaced in API response
-- Graceful degradation when TPoS absent or HTTP call fails
+- Merchant login credentials (login URL) surfaced in API response and dashboard
+- Graceful degradation when TPoS extension absent or HTTP call fails
+- Printable merchant poster at public URL with QR code and merchant name
+- Extension packaging (config.json, manifest.json, tile, README, LICENSE)
 
 **What's pending:**
-- S02: TPoS links and QR codes on both dashboards, printable merchant poster
 - Runtime UAT on a live LNbits instance (end-to-end payment flow, install from GitHub)
 - Replace placeholder tile image with branded artwork
 

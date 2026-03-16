@@ -4,29 +4,31 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Active
 
+No active requirements — all M002 requirements validated.
+
+## Validated
+
 ### R104 — TPoS link and QR on dashboards
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: Both orange piller and merchant dashboards display the TPoS shareable URL as a clickable link and a QR code. The link opens the TPoS payment page directly.
 - Why it matters: The orange piller needs to share the payment link with the merchant; the merchant needs quick access to their own payment terminal.
 - Source: user
 - Primary owning slice: M002/S02
 - Supporting slices: none
-- Validation: unmapped
-- Notes: QR code generated client-side using a JS library already available in LNbits (or a lightweight one). Only shown when tpos_url is present.
+- Validation: Dashboard columns wired with body-cell slots for tpos (link + QR icon + poster link) and merchant_credentials (copy button); QR dialog uses lnbits-qrcode component; null tpos_url shows grey "No TPoS" chip; template inspection grep confirms all terms in JS (6) and HTML (12); 32/32 tests pass
+- Notes: QR code generated client-side using lnbits-qrcode component. Only shown when tpos_url is present.
 
 ### R105 — Printable merchant poster with QR code
 - Class: primary-user-loop
-- Status: active
+- Status: validated
 - Description: A dedicated route serves a printable HTML page with the merchant's business name, "Pay with Bitcoin" branding, and a QR code pointing to the TPoS payment page. Designed for printing and placing at the merchant's counter.
 - Why it matters: The orange piller walks out of the shop with something physical to hand the merchant — a poster that makes Bitcoin payments possible without any merchant training.
 - Source: user
 - Primary owning slice: M002/S02
 - Supporting slices: none
-- Validation: unmapped
+- Validation: GET /orangepiller/poster/{id} returns 200 with merchant name + qrcode for valid arrangements, 404 for missing/no-tpos; extends print.html; unauthenticated; 3 contract tests pass; print CSS via @media print
 - Notes: Standalone page, no LNbits chrome. Print-optimized CSS. Accessible via a link from the dashboard.
-
-## Validated
 
 ### R001 — Merchant onboarding
 - Class: core-capability
@@ -258,8 +260,8 @@ This file is the explicit capability and coverage contract for the Orange Piller
 | R101 | core-capability | validated | M002/S01 | none | httpx POST to TPoS API + 2 tests |
 | R102 | primary-user-loop | validated | M002/S01 | M002/S02 | CreateArrangement 8 fields + 2 tests |
 | R103 | failure-visibility | validated | M002/S01 | none | 3 degradation tests |
-| R104 | primary-user-loop | active | M002/S02 | none | unmapped |
-| R105 | primary-user-loop | active | M002/S02 | none | unmapped |
+| R104 | primary-user-loop | validated | M002/S02 | none | dashboard columns + QR dialog + template grep |
+| R105 | primary-user-loop | validated | M002/S02 | none | poster route 3 tests + print.html + qrcode |
 | R106 | primary-user-loop | validated | M002/S01 | M002/S02 | merchant_credentials URL + 2 tests |
 | R011 | differentiator | deferred | none | none | unmapped |
 | R012 | constraint | out-of-scope | none | none | n/a |
@@ -269,7 +271,7 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Coverage Summary
 
-- Active requirements: 2
-- Mapped to slices: 2
-- Validated: 14
+- Active requirements: 0
+- Mapped to slices: 0
+- Validated: 16
 - Unmapped active requirements: 0

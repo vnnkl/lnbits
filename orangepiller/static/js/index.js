@@ -12,6 +12,8 @@ window.app = Vue.createApp({
       editForm: {id: '', reroute_percent: 50},
       showForgiveDialog: false,
       forgiveArrangementId: '',
+      showQrDialog: false,
+      qrDialogUrl: '',
       columns: [
         {
           name: 'merchant_wallet',
@@ -19,6 +21,27 @@ window.app = Vue.createApp({
           field: 'merchant_wallet',
           align: 'left',
           sortable: true
+        },
+        {
+          name: 'merchant_name',
+          label: 'Merchant Name',
+          field: 'merchant_name',
+          align: 'left',
+          sortable: true
+        },
+        {
+          name: 'tpos',
+          label: 'TPoS',
+          field: 'tpos_url',
+          align: 'center',
+          sortable: false
+        },
+        {
+          name: 'merchant_credentials',
+          label: 'Credentials',
+          field: 'merchant_credentials',
+          align: 'left',
+          sortable: false
         },
         {
           name: 'total_debt_sats',
@@ -86,6 +109,13 @@ window.app = Vue.createApp({
           sortable: true
         },
         {
+          name: 'tpos',
+          label: 'TPoS',
+          field: 'tpos_url',
+          align: 'center',
+          sortable: false
+        },
+        {
           name: 'total_debt_sats',
           label: 'Total Debt (sats)',
           field: 'total_debt_sats',
@@ -137,6 +167,10 @@ window.app = Vue.createApp({
     }
   },
   methods: {
+    showQr(url) {
+      this.qrDialogUrl = url
+      this.showQrDialog = true
+    },
     _mapArrangement(a) {
       return {
         ...a,
@@ -173,7 +207,7 @@ window.app = Vue.createApp({
           const newList = response.data.map(a => this._mapArrangement(a))
           this._detectCompletionTransitions(
             this.arrangements, newList,
-            a => 'Arrangement completed! Debt fully repaid for merchant ' + a.merchant_wallet
+            a => 'Arrangement completed! Debt fully repaid for merchant ' + (a.merchant_name || a.merchant_wallet)
           )
           this.arrangements = newList
         })

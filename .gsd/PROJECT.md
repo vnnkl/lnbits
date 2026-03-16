@@ -54,4 +54,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 ## Milestone Sequence
 
 - [x] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management. All 10 requirements validated. 20 tests pass.
-- [ ] M002: Merchant Activation Kit — S01 complete (TPoS provisioning + extended onboarding, 29 tests). S02 remaining (dashboards, QR codes, poster).
+- [x] M002: Merchant Activation Kit — TPoS auto-provisioning, extended onboarding, dashboard QR codes, merchant credentials, and printable poster. All 6 requirements validated. 32 tests pass.

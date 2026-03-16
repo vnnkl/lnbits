@@ -1,0 +1,84 @@
+{% extends "print.html" %}
+
+{% block styles %}
+<style>
+  .poster-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    text-align: center;
+    padding: 2rem;
+  }
+  .poster-merchant-name {
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+  }
+  .poster-subtitle {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    color: #555;
+  }
+  .poster-qr {
+    margin: 1rem 0 2rem 0;
+  }
+  .poster-footer {
+    margin-top: auto;
+    padding-top: 2rem;
+    font-size: 0.85rem;
+    color: #999;
+  }
+
+  @media print {
+    .print-hide {
+      display: none !important;
+    }
+    .poster-container {
+      padding: 0;
+      margin: 0;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block page %}
+<div class="poster-container">
+  <div class="text-h3 poster-merchant-name">{% raw %}{{ merchantName }}{% endraw %}</div>
+  <div class="poster-subtitle">Pay with Bitcoin ⚡</div>
+  <div class="poster-qr">
+    <lnbits-qrcode
+      {% raw %}:value="tposUrl"{% endraw %}
+      :show-buttons="false"
+    ></lnbits-qrcode>
+  </div>
+  <q-btn
+    class="print-hide q-mt-md"
+    color="primary"
+    label="Print this page"
+    icon="print"
+    @click="window.print()"
+  ></q-btn>
+  <div class="poster-footer">Powered by LNbits</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.poster_data = {{ poster_data | tojson | safe }};
+  window.app = Vue.createApp({
+    data() {
+      return {
+        merchantName: window.poster_data.merchant_name,
+        tposUrl: window.poster_data.tpos_url,
+      };
+    },
+  });
+  window.app.component('lnbits-qrcode', window.LNbits.components['lnbits-qrcode']);
+  window.app.mount('#vue');
+</script>
+{% endblock %}

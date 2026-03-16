@@ -37,6 +37,80 @@
           :pagination="{ rowsPerPage: 10 }"
           :loading="loading"
         >
+          <template v-slot:body-cell-tpos="props">
+            <q-td :props="props">
+              <div v-if="props.row.tpos_url">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="open_in_new"
+                  color="primary"
+                  size="sm"
+                  type="a"
+                  :href="props.row.tpos_url"
+                  target="_blank"
+                >
+                  <q-tooltip>Open TPoS</q-tooltip>
+                </q-btn>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="qr_code_2"
+                  color="primary"
+                  size="sm"
+                  @click="showQr(props.row.tpos_url)"
+                >
+                  <q-tooltip>Show QR code</q-tooltip>
+                </q-btn>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="print"
+                  color="primary"
+                  size="sm"
+                  type="a"
+                  :href="'/orangepiller/poster/' + props.row.id"
+                  target="_blank"
+                >
+                  <q-tooltip>Print poster</q-tooltip>
+                </q-btn>
+              </div>
+              <q-chip
+                v-else
+                dense
+                color="grey"
+                text-color="white"
+                label="No TPoS"
+                size="sm"
+              ></q-chip>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-merchant_credentials="props">
+            <q-td :props="props">
+              <div v-if="props.row.merchant_credentials" class="row items-center no-wrap">
+                <span class="text-caption ellipsis" style="max-width: 150px">
+                  {% raw %}{{ props.row.merchant_credentials }}{% endraw %}
+                </span>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="content_copy"
+                  color="primary"
+                  size="sm"
+                  @click="copyText(props.row.merchant_credentials)"
+                >
+                  <q-tooltip>Copy credentials</q-tooltip>
+                </q-btn>
+              </div>
+              <span v-else class="text-grey">—</span>
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-progress_percent="props">
             <q-td :props="props">
               <q-linear-progress
@@ -128,6 +202,45 @@
           :pagination="{ rowsPerPage: 10 }"
           :loading="merchantLoading"
         >
+          <template v-slot:body-cell-tpos="props">
+            <q-td :props="props">
+              <div v-if="props.row.tpos_url">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="open_in_new"
+                  color="primary"
+                  size="sm"
+                  type="a"
+                  :href="props.row.tpos_url"
+                  target="_blank"
+                >
+                  <q-tooltip>Open TPoS</q-tooltip>
+                </q-btn>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="qr_code_2"
+                  color="primary"
+                  size="sm"
+                  @click="showQr(props.row.tpos_url)"
+                >
+                  <q-tooltip>Show QR code</q-tooltip>
+                </q-btn>
+              </div>
+              <q-chip
+                v-else
+                dense
+                color="grey"
+                text-color="white"
+                label="No TPoS"
+                size="sm"
+              ></q-chip>
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-progress_percent="props">
             <q-td :props="props">
               <q-linear-progress
@@ -255,6 +368,26 @@
         color="negative"
         @click="forgiveArrangement()"
       ></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+<!-- QR Code Dialog -->
+<q-dialog v-model="showQrDialog">
+  <q-card style="min-width: 350px">
+    <q-card-section>
+      <div class="text-h6">
+        <q-icon name="qr_code_2" class="q-mr-sm"></q-icon>
+        TPoS QR Code
+      </div>
+    </q-card-section>
+
+    <q-card-section class="text-center">
+      <lnbits-qrcode :value="qrDialogUrl"></lnbits-qrcode>
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Close" v-close-popup></q-btn>
     </q-card-actions>
   </q-card>
 </q-dialog>

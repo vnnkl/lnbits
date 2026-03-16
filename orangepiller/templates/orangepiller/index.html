@@ -19,6 +19,7 @@
       </q-card-section>
     </q-card>
 
+    <!-- Orange Piller Arrangements Section -->
     <q-card class="q-pa-sm">
       <q-card-section>
         <div class="row items-center q-mb-md">
@@ -67,11 +68,95 @@
             </q-td>
           </template>
 
+          <template v-slot:body-cell-actions="props">
+            <q-td :props="props">
+              <div v-if="props.row.status === 'active'">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="edit"
+                  color="primary"
+                  size="sm"
+                  @click="openEditDialog(props.row)"
+                >
+                  <q-tooltip>Edit reroute %</q-tooltip>
+                </q-btn>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="favorite"
+                  color="pink"
+                  size="sm"
+                  @click="openForgiveDialog(props.row)"
+                >
+                  <q-tooltip>Forgive debt</q-tooltip>
+                </q-btn>
+              </div>
+            </q-td>
+          </template>
+
           <template v-slot:no-data>
             <div class="full-width row flex-center text-grey q-pa-lg">
               <q-icon name="info" size="sm" class="q-mr-sm"></q-icon>
               No arrangements yet. Create one via the API.
             </div>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+
+    <!-- Merchant Arrangements Section -->
+    <q-card class="q-pa-sm" v-if="merchantArrangements.length">
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">
+              <q-icon name="storefront" class="q-mr-sm"></q-icon>
+              My Merchant Arrangements
+            </h5>
+          </div>
+        </div>
+
+        <q-table
+          flat
+          bordered
+          :rows="merchantArrangements"
+          :columns="merchantColumns"
+          row-key="id"
+          :pagination="{ rowsPerPage: 10 }"
+          :loading="merchantLoading"
+        >
+          <template v-slot:body-cell-progress_percent="props">
+            <q-td :props="props">
+              <q-linear-progress
+                :value="props.row.progress_percent / 100"
+                color="green"
+                track-color="grey-3"
+                style="height: 20px; min-width: 100px"
+                rounded
+              >
+                <div class="absolute-full flex flex-center">
+                  <q-badge
+                    color="transparent"
+                    text-color="dark"
+                    :label="props.row.progress_percent + '%'"
+                  ></q-badge>
+                </div>
+              </q-linear-progress>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-status="props">
+            <q-td :props="props">
+              <q-chip
+                dense
+                :color="props.row.status === 'completed' ? 'green' : 'orange'"
+                text-color="white"
+                :label="props.row.status === 'completed' ? 'Completed' : 'Active'"
+              ></q-chip>
+            </q-td>
           </template>
         </q-table>
       </q-card-section>
@@ -105,6 +190,74 @@
     </q-card>
   </div>
 </div>
+
+<!-- Edit Reroute Percent Dialog -->
+<q-dialog v-model="showEditDialog">
+  <q-card style="min-width: 350px">
+    <q-card-section>
+      <div class="text-h6">Edit Reroute Percent</div>
+    </q-card-section>
+
+    <q-card-section>
+      <q-input
+        v-model.number="editForm.reroute_percent"
+        type="number"
+        label="Reroute Percent"
+        :rules="[
+          val => val >= 1 || 'Minimum is 1%',
+          val => val <= 100 || 'Maximum is 100%'
+        ]"
+        min="1"
+        max="100"
+        filled
+        dense
+        hint="Percentage of incoming payments rerouted for repayment (1–100)"
+      ></q-input>
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" v-close-popup></q-btn>
+      <q-btn
+        flat
+        label="Save"
+        color="primary"
+        @click="updateArrangement()"
+      ></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+<!-- Forgive Debt Confirmation Dialog -->
+<q-dialog v-model="showForgiveDialog">
+  <q-card style="min-width: 350px">
+    <q-card-section>
+      <div class="text-h6">
+        <q-icon name="warning" color="orange" class="q-mr-sm"></q-icon>
+        Forgive Debt
+      </div>
+    </q-card-section>
+
+    <q-card-section>
+      <p class="text-body1">
+        Are you sure you want to forgive the remaining debt on this arrangement?
+      </p>
+      <p class="text-body2 text-red">
+        <strong>This action is irreversible.</strong> The arrangement will be
+        marked as completed and no further repayments will be collected.
+      </p>
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" v-close-popup></q-btn>
+      <q-btn
+        flat
+        label="Forgive Debt"
+        color="negative"
+        @click="forgiveArrangement()"
+      ></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
 {% endblock %}
 
 {% block scripts %}

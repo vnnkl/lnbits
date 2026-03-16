@@ -62,7 +62,7 @@ This milestone is complete only when all are true:
 - [x] **S03: Orange piller dashboard** `risk:low` `depends:[S01,S02]`
   > After this: Orange piller opens the extension and sees all onboarded merchants with payback progress bars, amounts, percentages, and arrangement status.
 
-- [ ] **S04: Merchant view + arrangement management** `risk:low` `depends:[S01,S02]`
+- [x] **S04: Merchant view + arrangement management** `risk:low` `depends:[S01,S02]`
   > After this: Merchant sees their payback arrangement details from their own LNbits. Orange piller can adjust reroute percentage and forgive remaining debt from the dashboard.
 
 - [ ] **S05: Clean cutover, notifications & packaging** `risk:low` `depends:[S02,S03,S04]`

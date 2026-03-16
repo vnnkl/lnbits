@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -30,3 +32,8 @@ class Arrangement(BaseModel):
 class CreateArrangement(BaseModel):
     total_debt_sats: int
     reroute_percent: int
+
+
+class UpdateArrangement(BaseModel):
+    reroute_percent: Optional[int] = None
+    forgive: Optional[bool] = None

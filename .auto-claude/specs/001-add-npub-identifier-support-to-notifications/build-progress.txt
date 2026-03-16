@@ -1,0 +1,81 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Add npub Identifier Support to Nostr Notifications
+Workspace: /Users/constantin/Code/lnbits
+Started: 2025-12-21
+
+Workflow Type: feature
+Rationale: This is a new capability being added to an existing Nostr notification system. It requires backend logic for npub detection and NIP-65 relay fetching, modifications to the notification dispatch flow, UI updates for clarity, and new tests.
+
+Session 1 (Planner):
+- Completed deep codebase investigation
+- Created implementation_plan.json
+- Phases: 5
+- Total subtasks: 7
+- Created init.sh
+
+Phase Summary:
+- Phase 1 (Backend Nostr Service Extension): 2 subtasks, no dependencies
+  - Add is_npub_format() helper function
+  - Add fetch_nip65_relays() for NIP-65 relay lookup
+
+- Phase 2 (Backend Notification Dispatch Update): 1 subtask, depends on Phase 1
+  - Update send_nostr_notification() to detect npub and route appropriately
+
+- Phase 3 (Frontend UI Update): 1 subtask, no dependencies
+  - Update i18n translation to mention npub support
+
+- Phase 4 (Unit Tests): 2 subtasks, depends on Phase 1
+  - Create tests for is_npub_format()
+  - Create tests for fetch_nip65_relays() with mocking
+
+- Phase 5 (Integration Verification): 2 subtasks, depends on Phases 2, 3, 4
+  - Run all existing tests for regression check
+  - Verify linting passes
+
+Services Involved:
+- backend (main): Python/FastAPI - notification dispatch, Nostr services
+- frontend: Vue/Quasar - i18n translation updates
+
+Key Files to Modify:
+- lnbits/core/services/nostr.py (add is_npub_format, fetch_nip65_relays, BOOTSTRAP_RELAYS)
+- lnbits/core/services/notifications.py (update send_nostr_notification)
+- lnbits/static/i18n/en.js (update hint text)
+- tests/unit/test_nostr.py (new file with unit tests)
+
+Reference Files:
+- lnbits/utils/nostr.py (npub validation patterns)
+- lnbits/core/services/nostr.py (async HTTP/WebSocket patterns)
+- tests/unit/test_helpers.py (test structure patterns)
+
+Parallelism Analysis:
+- Max parallel phases: 2
+- Recommended workers: 1 (sequential execution recommended for single-service feature)
+- Parallel groups: Phase 1 + Phase 3 can run in parallel (no dependencies)
+
+Verification Strategy:
+- Risk level: medium
+- Test types: unit tests
+- Security scan: not required
+- Staging deployment: not required
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 1
+
+Development Environment:
+  poetry install
+  poetry run python -m lnbits
+
+Test Commands:
+  poetry run pytest tests/unit/ -v
+  poetry run ruff check lnbits/core/services/
+
+Service URLs:
+  LNbits: http://localhost:5002
+  API Docs: http://localhost:5002/docs
+  Account Settings: http://localhost:5002/account
+
+=== END SESSION 1 ===

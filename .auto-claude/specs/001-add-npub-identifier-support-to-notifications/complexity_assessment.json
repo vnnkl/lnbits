@@ -1,0 +1,94 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Extending existing Nostr notification system with npub support. The codebase already has npub validation utilities (normalize_public_key, validate_pub_key) and Nostr DM sending capabilities. The main gap is fetching relay lists for npub (NIP-65) since current flow uses NIP-5 which includes relays. Requires research on NIP-65 relay list fetching, but scope is contained to notification-related files.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 8,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Changes concentrated in: nostr.py service, notifications.py service, users.py model (UserNotifications), utils/nostr.py helpers, frontend notification settings UI (2 files), and tests. Single backend service with Vue.js frontend."
+    },
+    "integrations": {
+      "external_services": ["Nostr network (NIP-65 relay list)"],
+      "new_dependencies": [],
+      "research_needed": true,
+      "notes": "Project already has nostr-tools (JS), pynostr, bech32 dependencies. Need to research NIP-65 relay list fetching via Nostr protocol - current implementation only supports NIP-5 which provides relays in HTTP response. NIP-65 requires querying Nostr relays for kind:10002 events."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "No infrastructure changes needed. UserNotifications model uses JSON storage in 'extra' field, so adding nostr_relays field requires no schema migration."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": true,
+      "unfamiliar_tech": ["NIP-65 relay list protocol"],
+      "notes": "Strong existing patterns: npub↔hex conversion in utils/nostr.py (normalize_public_key, validate_pub_key, hex_to_npub), Nostr DM sending (send_nostr_dm), NIP-5 fetching (fetch_nip5_details). Research needed for NIP-65 kind:10002 event querying to fetch relay list for a pubkey."
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "Backward compatibility with existing NIP-5 identifiers",
+        "Relay list fetching reliability (Nostr network dependent)",
+        "Fallback behavior if no relays found for npub"
+      ],
+      "notes": "Must ensure existing NIP-5 notification flow continues working. Need graceful handling when relay list cannot be fetched."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "research",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": true,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "New API functionality for npub handling and relay list fetching requires unit tests for validation logic and integration tests for the notification flow. No auth/security/payment code touched, so no security scan needed. No database migrations or breaking changes requiring staging."
+  },
+
+  "key_files_identified": {
+    "backend": [
+      "lnbits/core/services/nostr.py - Add npub relay fetching (NIP-65)",
+      "lnbits/core/services/notifications.py - Update send_nostr_notification to detect npub vs NIP-5",
+      "lnbits/core/models/users.py - Extend UserNotifications model for relay storage",
+      "lnbits/utils/nostr.py - Existing helpers (normalize_public_key, validate_pub_key) - may need additions"
+    ],
+    "frontend": [
+      "lnbits/templates/components/admin/notifications.vue - Admin notification settings",
+      "lnbits/static/js/components/admin/lnbits-admin-notifications.js - Admin notifications JS",
+      "lnbits/static/js/pages/account.js - User account page (has nostr-related code)"
+    ],
+    "tests": [
+      "tests/ - Need new tests for npub validation and relay fetching"
+    ]
+  },
+
+  "existing_patterns": {
+    "npub_validation": "utils/nostr.py: normalize_public_key() converts npub→hex, validate_pub_key() validates both formats",
+    "nip5_fetching": "core/services/nostr.py: fetch_nip5_details() returns (pubkey, relays) tuple",
+    "nostr_dm_sending": "core/services/nostr.py: send_nostr_dm() sends encrypted DMs via websockets",
+    "notification_flow": "core/services/notifications.py: send_nostr_notification() fetches NIP-5 then sends DM"
+  },
+
+  "created_at": "2025-01-07T10:30:00Z"
+}

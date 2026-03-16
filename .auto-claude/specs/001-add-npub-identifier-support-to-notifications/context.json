@@ -1,0 +1,82 @@
+{
+  "task_description": "Add npub (Nostr public key) identifier support to LNbits notification settings, enabling users to receive notifications via their Nostr public keys using NIP-65 relay list fetching.",
+  "scoped_services": ["backend", "frontend"],
+  "files_to_modify": {
+    "backend": [
+      "lnbits/core/services/nostr.py",
+      "lnbits/core/services/notifications.py"
+    ],
+    "frontend": [
+      "lnbits/static/i18n/en.js"
+    ],
+    "tests": [
+      "tests/unit/test_nostr.py"
+    ]
+  },
+  "files_to_reference": [
+    "lnbits/utils/nostr.py",
+    "lnbits/core/services/nostr.py",
+    "lnbits/core/services/notifications.py",
+    "lnbits/templates/pages/account.vue",
+    "tests/unit/test_helpers.py"
+  ],
+  "patterns": {
+    "npub_validation": {
+      "description": "Use validate_pub_key() from lnbits/utils/nostr.py - handles both npub and hex formats, returns hex",
+      "example": "validate_pub_key('npub1...') returns hex pubkey"
+    },
+    "nip05_relay_fetch": {
+      "description": "fetch_nip5_details() returns tuple (pubkey_hex, relay_list)",
+      "example": "pubkey, relays = await fetch_nip5_details('user@domain.com')"
+    },
+    "websocket_connection": {
+      "description": "Use websocket.create_connection with 2-second timeout, close connections after use",
+      "example": "ws = create_connection(relay, timeout=2); ws.send(msg); ws.close()"
+    },
+    "async_pattern": {
+      "description": "Async functions with httpx.AsyncClient for HTTP, websocket for WS",
+      "example": "async with httpx.AsyncClient() as client: resp = await client.get(url)"
+    },
+    "testing": {
+      "description": "Use @pytest.mark.anyio decorator, Settings fixture available",
+      "example": "@pytest.mark.anyio\ndef test_function(settings: Settings):"
+    }
+  },
+  "existing_implementations": {
+    "npub_utils": {
+      "file": "lnbits/utils/nostr.py",
+      "functions": ["validate_pub_key", "normalize_public_key", "hex_to_npub"],
+      "notes": "All npub validation already implemented - reuse these"
+    },
+    "nip05_flow": {
+      "file": "lnbits/core/services/nostr.py",
+      "functions": ["fetch_nip5_details", "send_nostr_dm"],
+      "notes": "NIP-05 fetching and DM sending complete - add NIP-65 parallel flow"
+    },
+    "notification_dispatch": {
+      "file": "lnbits/core/services/notifications.py",
+      "functions": ["send_nostr_notification", "send_nostr_notifications"],
+      "notes": "Currently only NIP-05 - add npub detection and routing"
+    }
+  },
+  "dependencies": {
+    "already_installed": [
+      "bech32==1.2.0 (npub encoding/decoding)",
+      "pynostr==0.6.2 (encrypted DMs, event signing)",
+      "nostr-sdk==0.42.1 (installed but not currently used for relay fetching)",
+      "websocket-client==1.8.0 (WebSocket connections)"
+    ],
+    "new_dependencies_required": []
+  },
+  "constants": {
+    "BOOTSTRAP_RELAYS": [
+      "wss://relay.damus.io",
+      "wss://nos.lol",
+      "wss://relay.nostr.band",
+      "wss://nostr.wine",
+      "wss://relay.snort.social"
+    ],
+    "NIP65_EVENT_KIND": 10002
+  },
+  "created_at": "2025-12-21T22:30:00.000000"
+}

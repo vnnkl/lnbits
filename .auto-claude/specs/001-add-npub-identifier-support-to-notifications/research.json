@@ -1,0 +1,326 @@
+{
+  "integrations_researched": [
+    {
+      "name": "bech32 (for npub encoding/decoding)",
+      "type": "library",
+      "verified_package": {
+        "name": "bech32",
+        "install_command": "pip install bech32==1.2.0",
+        "version": "1.2.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from bech32 import bech32_decode, bech32_encode, convertbits"
+        ],
+        "initialization": "No initialization required",
+        "key_functions": [
+          "bech32_decode(bech) -> (hrp, data)",
+          "bech32_encode(hrp, data) -> str",
+          "convertbits(data, frombits, tobits, pad) -> list"
+        ],
+        "verified_against": "LNbits existing code at lnbits/utils/nostr.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "npub prefix is 'npub1' (not 'npub')",
+        "Must convert between 5-bit and 8-bit representations",
+        "Hex pubkey is 64 characters (32 bytes)"
+      ],
+      "existing_usage_in_lnbits": {
+        "file": "lnbits/utils/nostr.py",
+        "functions": [
+          "normalize_public_key(key) - converts npub to hex",
+          "normalize_bech32_key(hrp, key) - generic bech32 to hex",
+          "hex_to_npub(hex_pubkey) - converts hex to npub",
+          "validate_pub_key(pubkey) - validates npub or hex format"
+        ]
+      },
+      "research_sources": [
+        "LNbits codebase: lnbits/utils/nostr.py",
+        "Context7 MCP: /nostr-protocol/nips (NIP-19)"
+      ]
+    },
+    {
+      "name": "pynostr",
+      "type": "library",
+      "verified_package": {
+        "name": "pynostr",
+        "install_command": "pip install pynostr==0.6.2",
+        "version": "0.6.2",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from pynostr.key import PrivateKey",
+          "from pynostr.encrypted_dm import EncryptedDirectMessage"
+        ],
+        "initialization": "private_key = PrivateKey()",
+        "key_functions": [
+          "EncryptedDirectMessage() - for encrypted DMs",
+          "dm.encrypt(private_key_hex, recipient_pubkey, cleartext_content)",
+          "dm.to_event() -> Event",
+          "event.sign(private_key_hex)",
+          "event.to_message() -> JSON string"
+        ],
+        "verified_against": "LNbits existing code at lnbits/core/services/nostr.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": ["coincurve", "pycryptodomex"]
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Uses NIP-04 encryption for DMs",
+        "Private key must be in hex format for signing",
+        "Recipient pubkey must be hex (not npub)"
+      ],
+      "existing_usage_in_lnbits": {
+        "file": "lnbits/core/services/nostr.py",
+        "functions": [
+          "send_nostr_dm() - sends encrypted DM to a pubkey via relays"
+        ]
+      },
+      "research_sources": [
+        "Context7 MCP: /jeffthibault/python-nostr",
+        "LNbits codebase: lnbits/core/services/nostr.py"
+      ]
+    },
+    {
+      "name": "nostr-sdk (Python bindings)",
+      "type": "library",
+      "verified_package": {
+        "name": "nostr-sdk",
+        "install_command": "pip install nostr-sdk==0.42.1",
+        "version": "0.42.1",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from nostr_sdk import Client, Keys, PublicKey, Filter, Kind"
+        ],
+        "initialization": "client = Client()\nawait client.add_relay('wss://relay.example.com')\nawait client.connect()",
+        "key_functions": [
+          "Client() - high-level client for relay interaction",
+          "Filter().author(pubkey).kind(Kind(10002)) - filter for NIP-65 relay list",
+          "client.fetch_events(filters, timeout) - fetch events from relays",
+          "PublicKey.from_bech32(npub) - parse npub string",
+          "PublicKey.from_hex(hex) - parse hex pubkey"
+        ],
+        "verified_against": "Context7 MCP: /websites/rs_nostr-sdk_0_43_0_nostr_sdk"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Rust-based library with Python bindings",
+        "Async/await API",
+        "Already installed in LNbits but not currently used for relay fetching"
+      ],
+      "potential_use": "Could be used to fetch NIP-65 relay list events for a given npub",
+      "research_sources": [
+        "Context7 MCP: /websites/rs_nostr-sdk_0_43_0_nostr_sdk",
+        "PyPI: nostr-sdk"
+      ]
+    },
+    {
+      "name": "NIP-19 (bech32-encoded entities)",
+      "type": "protocol_spec",
+      "verified": true,
+      "specification": {
+        "npub_format": {
+          "prefix": "npub",
+          "hrp": "npub",
+          "content": "32-byte public key (x-only schnorr pubkey)",
+          "encoding": "bech32",
+          "example": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
+        },
+        "validation_rules": [
+          "Must start with 'npub1'",
+          "Must be valid bech32 encoding",
+          "Decoded data must be exactly 32 bytes",
+          "Total length typically 63 characters"
+        ]
+      },
+      "existing_implementation": {
+        "file": "lnbits/utils/nostr.py",
+        "notes": "LNbits already has validate_pub_key() that handles both npub and hex formats"
+      },
+      "research_sources": [
+        "Context7 MCP: /nostr-protocol/nips (NIP-19)",
+        "https://github.com/nostr-protocol/nips/blob/master/19.md"
+      ]
+    },
+    {
+      "name": "NIP-65 (Relay List Metadata)",
+      "type": "protocol_spec",
+      "verified": true,
+      "specification": {
+        "event_kind": 10002,
+        "purpose": "Advertise user's preferred relays for reading/writing",
+        "event_structure": {
+          "kind": 10002,
+          "content": "",
+          "tags": [
+            ["r", "wss://relay1.example.com"],
+            ["r", "wss://relay2.example.com", "write"],
+            ["r", "wss://relay3.example.com", "read"]
+          ]
+        },
+        "tag_format": {
+          "basic": ["r", "<relay-url>"],
+          "with_marker": ["r", "<relay-url>", "read|write"]
+        },
+        "notes": [
+          "If no marker, relay is used for both read and write",
+          "Replaceable event (only most recent is valid)",
+          "Should query from multiple bootstrap relays"
+        ]
+      },
+      "implementation_approach": {
+        "fetch_relay_list": [
+          "1. Convert npub to hex pubkey (already have this)",
+          "2. Connect to bootstrap relays (e.g., wss://relay.damus.io, wss://nos.lol)",
+          "3. Query for kind:10002 events from the target pubkey",
+          "4. Parse 'r' tags to extract relay URLs",
+          "5. Filter for 'write' relays (or all if no marker)"
+        ],
+        "suggested_bootstrap_relays": [
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://relay.nostr.band",
+          "wss://nostr.wine",
+          "wss://relay.snort.social"
+        ]
+      },
+      "research_sources": [
+        "Context7 MCP: /nostr-protocol/nips (NIP-65)",
+        "https://github.com/nostr-protocol/nips/blob/master/65.md"
+      ]
+    },
+    {
+      "name": "NIP-05 (Internet Identifier)",
+      "type": "protocol_spec",
+      "verified": true,
+      "specification": {
+        "format": "user@domain.com",
+        "resolution": "GET https://domain.com/.well-known/nostr.json?name=user",
+        "response_includes": {
+          "names": {"user": "<hex-pubkey>"},
+          "relays": {"<hex-pubkey>": ["wss://relay1", "wss://relay2"]}
+        }
+      },
+      "existing_implementation": {
+        "file": "lnbits/core/services/nostr.py",
+        "function": "fetch_nip5_details(identifier) -> (pubkey, relays)",
+        "notes": "This is the current method for getting relays - only supports NIP-5 format"
+      },
+      "research_sources": [
+        "Context7 MCP: /nostr-protocol/nips (NIP-05)",
+        "LNbits codebase: lnbits/core/services/nostr.py"
+      ]
+    }
+  ],
+  "existing_codebase_analysis": {
+    "nostr_utilities": {
+      "file": "lnbits/utils/nostr.py",
+      "relevant_functions": {
+        "validate_pub_key": "Validates npub or hex format, returns hex",
+        "normalize_public_key": "Converts npub to hex (calls normalize_bech32_key)",
+        "normalize_bech32_key": "Generic bech32 to hex conversion",
+        "hex_to_npub": "Converts hex pubkey to npub format"
+      },
+      "status": "Complete - npub validation already exists"
+    },
+    "nostr_services": {
+      "file": "lnbits/core/services/nostr.py",
+      "relevant_functions": {
+        "send_nostr_dm": "Sends encrypted DM to pubkey via relays",
+        "fetch_nip5_details": "Fetches pubkey and relays from NIP-5 identifier"
+      },
+      "missing": "Function to fetch relay list for npub via NIP-65"
+    },
+    "notification_services": {
+      "file": "lnbits/core/services/notifications.py",
+      "relevant_functions": {
+        "send_nostr_notification": "Sends notification to NIP-5 identifier",
+        "send_nostr_notifications": "Sends to multiple identifiers"
+      },
+      "issue": "Only supports NIP-5 format, needs to detect npub format and use NIP-65"
+    },
+    "user_models": {
+      "file": "lnbits/core/models/users.py",
+      "model": "UserNotifications",
+      "field": "nostr_identifier: str | None = None",
+      "status": "Field exists - can store npub or NIP-5 identifier"
+    },
+    "admin_ui": {
+      "file": "lnbits/templates/components/admin/notifications.vue",
+      "current_state": "Has input for nostr identifiers (NIP-5 format)",
+      "needed": "Should accept npub format in addition to NIP-5"
+    }
+  },
+  "unverified_claims": [],
+  "recommendations": [
+    {
+      "title": "Reuse existing npub validation",
+      "description": "LNbits already has validate_pub_key() in lnbits/utils/nostr.py that handles npub format. No need to add new validation logic."
+    },
+    {
+      "title": "Create fetch_npub_relay_list function",
+      "description": "Add a new function to lnbits/core/services/nostr.py that: 1) Takes an npub, 2) Converts to hex, 3) Queries bootstrap relays for kind:10002 events, 4) Returns list of relay URLs. Use nostr-sdk or pynostr for relay interaction."
+    },
+    {
+      "title": "Update send_nostr_notification to detect identifier type",
+      "description": "Modify send_nostr_notification() to check if identifier starts with 'npub' vs contains '@', then use appropriate relay fetch method (NIP-65 vs NIP-05)."
+    },
+    {
+      "title": "Consider fallback relays",
+      "description": "If NIP-65 fetch fails or returns no relays, consider using hardcoded fallback relays or skip notification with a warning."
+    },
+    {
+      "title": "Use nostr-sdk for relay list fetching",
+      "description": "nostr-sdk (already installed) provides high-level async API for querying relays. Could be more reliable than raw websocket implementation."
+    },
+    {
+      "title": "No new dependencies needed",
+      "description": "All required libraries are already installed: bech32, pynostr, nostr-sdk. Implementation can use existing dependencies."
+    }
+  ],
+  "implementation_notes": {
+    "key_insight": "Most of the heavy lifting is already done. LNbits has npub validation, DM sending, and relay interaction. The main missing piece is a function to fetch relay list from NIP-65 events given an npub.",
+    "minimal_changes_needed": [
+      "1. Add fetch_npub_relay_list() function in lnbits/core/services/nostr.py",
+      "2. Update send_nostr_notification() to detect npub vs NIP-5 and call appropriate relay fetch",
+      "3. Optionally add npub format hint/validation in UI (though existing input should work)"
+    ],
+    "suggested_bootstrap_relays": [
+      "wss://relay.damus.io",
+      "wss://nos.lol",
+      "wss://relay.nostr.band",
+      "wss://purplepag.es",
+      "wss://relay.snort.social"
+    ]
+  },
+  "context7_libraries_used": [
+    "/jeffthibault/python-nostr",
+    "/nostr-protocol/nips",
+    "/websites/rs_nostr-sdk_0_43_0_nostr_sdk"
+  ],
+  "created_at": "2024-12-21T12:00:00Z"
+}

@@ -2,8 +2,26 @@
 {% from "macros.jinja" import window_vars with context %}
 
 {% block page %}
+<div class="row q-col-gutter-md q-mb-md">
+  <div class="col-12">
+    <q-card>
+      <q-card-section horizontal>
+        <q-card-section>
+          <h6 class="text-subtitle1 q-my-none">
+            {{SITE_TITLE}} Orange Piller
+          </h6>
+          <p class="q-mt-sm q-mb-none text-caption">
+            Onboard merchants to Bitcoin with managed LNbits accounts and payback arrangements.
+            A percentage of incoming payments is automatically rerouted back to you until the debt is fully repaid.
+          </p>
+        </q-card-section>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+
 <div class="row q-col-gutter-md">
-  <div class="col-12 col-md-8 q-gutter-y-md">
+  <div class="col-12 q-gutter-y-md">
     <q-card class="q-pa-sm">
       <q-card-section class="q-pa-none text-center">
         <q-form class="q-gutter-md">
@@ -282,33 +300,6 @@
             </q-td>
           </template>
         </q-table>
-      </q-card-section>
-    </q-card>
-  </div>
-
-  <div class="col-12 col-md-4 q-gutter-y-md">
-    <q-card>
-      <q-card-section>
-        <h6 class="text-subtitle1 q-my-none">
-          {{SITE_TITLE}} Orange Piller
-        </h6>
-      </q-card-section>
-      <q-separator></q-separator>
-      <q-card-section>
-        <p>
-          Onboard merchants to Bitcoin with managed LNbits accounts and
-          payback arrangements.
-        </p>
-        <p>
-          Each arrangement tracks a merchant's debt repayment. A percentage of
-          incoming payments to the merchant's wallet is automatically rerouted
-          back to you until the debt is fully repaid.
-        </p>
-        <p>
-          The <strong>Progress</strong> column shows how much of the total debt
-          has been repaid. When repayment is complete, the status changes to
-          <q-chip dense color="green" text-color="white" label="Completed" size="sm"></q-chip>.
-        </p>
       </q-card-section>
     </q-card>
   </div>

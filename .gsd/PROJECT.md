@@ -10,7 +10,22 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 
 ## Current State
 
-S01 (Extension scaffold + onboarding API) is complete. S02 (Payment rerouting engine) is complete — atomic debt tracking, internal transfers with rollback, 11 passing tests. S03 (Orange piller dashboard) is complete — Quasar table with progress bars, status badges, computed fields. S04 (Merchant view + arrangement management) is complete — merchant transparency view, edit/forgive management controls with authorized PUT endpoint. S05 (Clean cutover, notifications & packaging) is complete — cutover tests pass, toast notifications on both dashboards, extension packaging with config.json/tile/README/LICENSE. All 5 slices complete. Milestone M001 ready for UAT.
+**Milestone M001 (Orange Piller Extension) is complete.** All 5 slices delivered. All 10 requirements validated. 20/20 tests pass. Extension is structurally complete with full packaging for GitHub installation.
+
+**What's built:**
+- Atomic merchant onboarding (account + wallet + arrangement in one API call)
+- Payment rerouting engine with concurrency-safe debt tracking and rollback
+- Orange piller dashboard with progress bars, status badges, and management controls
+- Merchant transparency view with arrangement details
+- Arrangement management (adjust reroute %, forgive debt)
+- Clean cutover (debt → zero → completed → rerouting stops)
+- Toast notifications on both dashboards for completion transitions
+- Extension packaging (config.json, manifest.json, tile, README, LICENSE)
+
+**What's pending:**
+- Runtime UAT on a live LNbits instance (end-to-end payment flow, install from GitHub)
+- Replace placeholder tile image with branded artwork
+- Populate config.json `images` array with UI screenshots
 
 ## Architecture / Key Patterns
 
@@ -20,6 +35,7 @@ S01 (Extension scaffold + onboarding API) is complete. S02 (Payment rerouting en
 - Payment interception via `register_invoice_listener` + `asyncio.Queue`
 - Internal wallet-to-wallet transfers via `create_invoice` + `pay_invoice`
 - Merchant account creation via `create_user_account_no_ckeck` with `default_exts=["orangepiller"]`
+- Atomic SQL UPDATE with CASE for concurrent-safe debt capping
 - Pydantic v1 models, SQLAlchemy 1.4, async Python
 
 ## Capability Contract
@@ -28,4 +44,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 
 ## Milestone Sequence
 
-- [ ] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management
+- [x] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management. All 10 requirements validated. 20 tests pass.

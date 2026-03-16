@@ -53,7 +53,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: TPoS integration + extended onboarding** `risk:high` `depends:[]`
+- [x] **S01: TPoS integration + extended onboarding** `risk:high` `depends:[]`
   > After this: Orange piller calls the extended POST endpoint with merchant name, currency, and TPoS settings → merchant account created with TPoS terminal auto-provisioned. API returns arrangement with TPoS URL and merchant credentials. Works without TPoS installed (arrangement created, TPoS fields null, warning in response). Verified via API calls and TPoS URL accessibility.
 
 - [ ] **S02: Dashboards, QR codes & printable poster** `risk:low` `depends:[S01]`

@@ -1,9 +1,12 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 
+from lnbits.core.crud.extensions import get_installed_extension
 from lnbits.core.models import WalletTypeInfo
 from lnbits.core.services.users import create_user_account_no_ckeck
 from lnbits.decorators import require_admin_key
+from lnbits.settings import settings
 
 from .crud import (
     create_arrangement,
@@ -32,8 +35,8 @@ async def api_create_arrangement(
     """Create a new payback arrangement.
 
     Atomically creates a merchant LNbits account (with orangepiller
-    extension auto-enabled), extracts the wallet ID, and stores the
-    payback arrangement.
+    extension auto-enabled), extracts the wallet ID, conditionally
+    provisions a TPoS terminal, and stores the payback arrangement.
     """
     if data.total_debt_sats <= 0:
         raise HTTPException(
@@ -46,9 +49,17 @@ async def api_create_arrangement(
             detail="reroute_percent must be between 1 and 100",
         )
 
+    # Step 2: Detect TPoS installation
+    tpos_installed = await get_installed_extension("tpos")
+
+    # Step 3: Conditional default_exts
+    default_exts = (
+        ["orangepiller", "tpos"] if tpos_installed else ["orangepiller"]
+    )
+
     try:
         user = await create_user_account_no_ckeck(
-            default_exts=["orangepiller"],
+            default_exts=default_exts,
         )
     except Exception as exc:
         logger.error(f"Failed to create merchant account: {exc}")
@@ -60,12 +71,75 @@ async def api_create_arrangement(
     merchant_wallet = user.wallets[0].id
     merchant_user_id = user.id
 
+    # Step 4: Construct base URL and merchant credentials
+    base_url = settings.lnbits_baseurl.rstrip("/")
+    merchant_credentials = f"{base_url}/wallet?usr={user.id}"
+
+    # Steps 5-7: TPoS provisioning (conditional)
+    tpos_id = None
+    tpos_url = None
+    warning = None
+
+    if tpos_installed:
+        try:
+            tpos_payload = {
+                "name": data.merchant_name or "Terminal",
+                "currency": data.currency,
+                "tip_options": data.tip_options or "[]",
+                "tax_default": data.tax_default,
+                "tax_inclusive": data.tax_inclusive,
+                "business_name": data.business_name,
+                "business_address": data.business_address,
+                "business_vat_id": data.business_vat_id,
+                "wallet": merchant_wallet,
+            }
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{base_url}/tpos/api/v1/tposs",
+                    json=tpos_payload,
+                    headers={"X-Api-Key": user.wallets[0].adminkey},
+                )
+                resp.raise_for_status()
+                resp_json = resp.json()
+
+            tpos_id = resp_json["id"]
+            tpos_url = f"{base_url}/tpos/{tpos_id}"
+            logger.info(
+                f"TPoS provisioned: tpos_id={tpos_id}, "
+                f"arrangement merchant_user_id={merchant_user_id}"
+            )
+        except Exception as exc:
+            tpos_id = None
+            tpos_url = None
+            warning = f"TPoS provisioning failed: {str(exc)}"
+            logger.warning(
+                f"TPoS provisioning failed for "
+                f"merchant_user_id={merchant_user_id}: {exc}"
+            )
+    else:
+        warning = (
+            "TPoS extension is not installed. "
+            "Arrangement created without a payment terminal."
+        )
+        logger.warning(
+            "TPoS extension not installed — "
+            f"arrangement for merchant_user_id={merchant_user_id} "
+            "created without TPoS terminal"
+        )
+
+    # Step 8: Create arrangement with new fields
     arrangement = await create_arrangement(
         orange_piller_wallet=key_info.wallet.id,
         merchant_wallet=merchant_wallet,
         merchant_user_id=merchant_user_id,
         data=data,
+        tpos_id=tpos_id,
+        tpos_url=tpos_url,
+        merchant_credentials=merchant_credentials,
     )
+
+    # Step 9: Set warning (response-only, not persisted)
+    arrangement.warning = warning
 
     logger.info(
         f"Arrangement created: id={arrangement.id}, "

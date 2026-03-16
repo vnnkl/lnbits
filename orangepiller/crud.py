@@ -13,6 +13,9 @@ async def create_arrangement(
     merchant_wallet: str,
     merchant_user_id: str,
     data: CreateArrangement,
+    tpos_id: Optional[str] = None,
+    tpos_url: Optional[str] = None,
+    merchant_credentials: Optional[str] = None,
 ) -> Arrangement:
     arrangement_id = urlsafe_short_hash()
     arrangement = Arrangement(
@@ -24,6 +27,10 @@ async def create_arrangement(
         repaid_sats=0,
         reroute_percent=data.reroute_percent,
         status="active",
+        tpos_id=tpos_id,
+        tpos_url=tpos_url,
+        merchant_name=data.merchant_name,
+        merchant_credentials=merchant_credentials,
     )
     await db.insert("orangepiller.arrangements", arrangement)
     return arrangement

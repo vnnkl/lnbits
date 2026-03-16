@@ -22,9 +22,16 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 - Toast notifications on both dashboards for completion transitions
 - Extension packaging (config.json, manifest.json, tile, README, LICENSE)
 
-**M002 (Merchant Activation Kit) is in planning.** Auto-provision TPoS terminals during onboarding, surface shareable payment links and QR codes on dashboards, generate printable merchant posters.
+**M002 (Merchant Activation Kit) S01 complete.** TPoS auto-provisioning during onboarding, extended onboarding fields, merchant credential surfacing, and graceful degradation — proven by 9 new tests (29 total). S02 (dashboards, QR codes, printable poster) is next.
+
+**What was added in S01:**
+- TPoS auto-provisioning via cross-extension httpx call during onboarding
+- Extended onboarding with merchant name, currency, tip/tax settings, business info
+- Merchant login credentials (login URL) surfaced in API response
+- Graceful degradation when TPoS absent or HTTP call fails
 
 **What's pending:**
+- S02: TPoS links and QR codes on both dashboards, printable merchant poster
 - Runtime UAT on a live LNbits instance (end-to-end payment flow, install from GitHub)
 - Replace placeholder tile image with branded artwork
 
@@ -47,4 +54,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 ## Milestone Sequence
 
 - [x] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management. All 10 requirements validated. 20 tests pass.
-- [ ] M002: Merchant Activation Kit — Auto-provision TPoS terminal during onboarding, shareable payment links with QR codes on dashboards, printable merchant poster for the counter.
+- [ ] M002: Merchant Activation Kit — S01 complete (TPoS provisioning + extended onboarding, 29 tests). S02 remaining (dashboards, QR codes, poster).

@@ -20,3 +20,21 @@ async def m001_initial(db: Connection):
         );
     """
     )
+
+
+async def m002_tpos_fields(db: Connection):
+    """
+    Add TPoS and merchant fields to arrangements table.
+    """
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements ADD COLUMN tpos_id TEXT DEFAULT NULL"
+    )
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements ADD COLUMN tpos_url TEXT DEFAULT NULL"
+    )
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements ADD COLUMN merchant_name TEXT DEFAULT NULL"
+    )
+    await db.execute(
+        "ALTER TABLE orangepiller.arrangements ADD COLUMN merchant_credentials TEXT DEFAULT NULL"
+    )

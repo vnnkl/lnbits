@@ -4,39 +4,6 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Active
 
-### R101 — TPoS auto-provisioning during onboarding
-- Class: core-capability
-- Status: active
-- Description: When the orange piller creates an arrangement, a TPoS terminal is automatically created on the merchant's wallet via the TPoS extension API. The TPoS ID and shareable URL are stored on the arrangement.
-- Why it matters: Without a payment terminal, the merchant has no way to accept Bitcoin at their counter — the rerouting engine sits idle.
-- Source: user
-- Primary owning slice: M002/S01
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Uses internal HTTP call to TPoS API (`POST /tpos/api/v1/tposs`) with the merchant wallet's adminkey. TPoS must also be added to `default_exts` during account creation so it's enabled on the merchant's account.
-
-### R102 — Extended onboarding form with merchant/TPoS settings
-- Class: primary-user-loop
-- Status: active
-- Description: The onboarding form includes core TPoS configuration fields: merchant name, currency, tip options, tax default, tax inclusive toggle, and business info (name, address, VAT ID).
-- Why it matters: The orange piller needs to configure the merchant's payment terminal during onboarding — they can't do it later without the merchant's login.
-- Source: user
-- Primary owning slice: M002/S01
-- Supporting slices: M002/S02
-- Validation: unmapped
-- Notes: Power-user TPoS features (inventory, ATM/withdraw, Stripe, remote mode) are omitted — merchant can configure those later from their own TPoS admin.
-
-### R103 — Graceful degradation when TPoS not installed
-- Class: failure-visibility
-- Status: active
-- Description: If TPoS is not installed on the LNbits instance, onboarding still succeeds — the arrangement is created without a TPoS terminal. The orange piller sees a warning that no payment terminal was provisioned.
-- Why it matters: The extension shouldn't break if the LNbits admin hasn't installed TPoS.
-- Source: user
-- Primary owning slice: M002/S01
-- Supporting slices: none
-- Validation: unmapped
-- Notes: TPoS URL fields on the arrangement will be null/empty. Dashboards should display an informative message instead of a broken link.
-
 ### R104 — TPoS link and QR on dashboards
 - Class: primary-user-loop
 - Status: active
@@ -58,17 +25,6 @@ This file is the explicit capability and coverage contract for the Orange Piller
 - Supporting slices: none
 - Validation: unmapped
 - Notes: Standalone page, no LNbits chrome. Print-optimized CSS. Accessible via a link from the dashboard.
-
-### R106 — Merchant login credentials surfaced to orange piller
-- Class: primary-user-loop
-- Status: active
-- Description: After onboarding, the orange piller receives the merchant's LNbits login URL (or credentials) so they can share access to the merchant's full LNbits dashboard.
-- Why it matters: The merchant needs a way to access their own LNbits account to see their arrangement, configure settings, and eventually manage their wallet independently.
-- Source: inferred
-- Primary owning slice: M002/S01
-- Supporting slices: M002/S02
-- Validation: unmapped
-- Notes: Need to determine what `create_user_account_no_ckeck` returns for authentication — may be a username/password, an auth token, or a direct login link. Surface whatever is available.
 
 ## Validated
 
@@ -182,6 +138,50 @@ This file is the explicit capability and coverage contract for the Orange Piller
 - Validation: Toast notification code present in JS with transition-aware detection; status chips show completion state. Visual verification deferred to UAT.
 - Notes: At minimum a status change on both dashboards. Push notification or in-app notification as stretch.
 
+### R101 — TPoS auto-provisioning during onboarding
+- Class: core-capability
+- Status: validated
+- Description: When the orange piller creates an arrangement, a TPoS terminal is automatically created on the merchant's wallet via the TPoS extension API. The TPoS ID and shareable URL are stored on the arrangement.
+- Why it matters: Without a payment terminal, the merchant has no way to accept Bitcoin at their counter — the rerouting engine sits idle.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: none
+- Validation: POST handler calls httpx POST to /tpos/api/v1/tposs with merchant adminkey; tpos_id and tpos_url stored on arrangement; proven by test_create_arrangement_with_tpos and test_httpx_called_with_tpos_payload; 29/29 tests pass
+- Notes: Uses internal HTTP call to TPoS API (`POST /tpos/api/v1/tposs`) with the merchant wallet's adminkey. TPoS added to `default_exts` during account creation only when detected as installed.
+
+### R102 — Extended onboarding form with merchant/TPoS settings
+- Class: primary-user-loop
+- Status: validated
+- Description: The onboarding form includes core TPoS configuration fields: merchant name, currency, tip options, tax default, tax inclusive toggle, and business info (name, address, VAT ID).
+- Why it matters: The orange piller needs to configure the merchant's payment terminal during onboarding — they can't do it later without the merchant's login.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02
+- Validation: CreateArrangement model accepts all 8 fields with correct defaults; test_extended_create_fields_accepted and test_extended_create_fields_defaults pass; fields passed through to TPoS payload via httpx
+- Notes: Power-user TPoS features (inventory, ATM/withdraw, Stripe, remote mode) are omitted — merchant can configure those later from their own TPoS admin.
+
+### R103 — Graceful degradation when TPoS not installed
+- Class: failure-visibility
+- Status: validated
+- Description: If TPoS is not installed on the LNbits instance, onboarding still succeeds — the arrangement is created without a TPoS terminal. The orange piller sees a warning that no payment terminal was provisioned.
+- Why it matters: The extension shouldn't break if the LNbits admin hasn't installed TPoS.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: none
+- Validation: test_create_arrangement_without_tpos proves tpos_id=None and warning present; test_default_exts_omits_tpos_when_not_installed proves "tpos" excluded from default_exts; test_create_arrangement_tpos_http_failure proves httpx failure handled gracefully
+- Notes: TPoS URL fields on the arrangement will be null/empty. Dashboards should display an informative message instead of a broken link.
+
+### R106 — Merchant login credentials surfaced to orange piller
+- Class: primary-user-loop
+- Status: validated
+- Description: After onboarding, the orange piller receives the merchant's LNbits login URL so they can share access to the merchant's full LNbits dashboard.
+- Why it matters: The merchant needs a way to access their own LNbits account to see their arrangement, configure settings, and eventually manage their wallet independently.
+- Source: inferred
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02
+- Validation: merchant_credentials contains /wallet?usr={user_id} login URL; proven by test_merchant_credentials_format_with_tpos and test_merchant_credentials_format_without_tpos — always populated regardless of TPoS status
+- Notes: Uses LNbits standard user-id auth pattern. `create_user_account_no_ckeck` returns User object with `.id` used to construct the login URL.
+
 ## Deferred
 
 ### R011 — Bitcoin store map listing
@@ -255,12 +255,12 @@ This file is the explicit capability and coverage contract for the Orange Piller
 | R008 | core-capability | validated | M001/S05 | M001/S02 | test_cutover.py |
 | R009 | launchability | validated | M001/S05 | M001/S01 | config.json + artifacts |
 | R010 | failure-visibility | validated | M001/S05 | none | toast notification code |
-| R101 | core-capability | active | M002/S01 | none | unmapped |
-| R102 | primary-user-loop | active | M002/S01 | M002/S02 | unmapped |
-| R103 | failure-visibility | active | M002/S01 | none | unmapped |
+| R101 | core-capability | validated | M002/S01 | none | httpx POST to TPoS API + 2 tests |
+| R102 | primary-user-loop | validated | M002/S01 | M002/S02 | CreateArrangement 8 fields + 2 tests |
+| R103 | failure-visibility | validated | M002/S01 | none | 3 degradation tests |
 | R104 | primary-user-loop | active | M002/S02 | none | unmapped |
 | R105 | primary-user-loop | active | M002/S02 | none | unmapped |
-| R106 | primary-user-loop | active | M002/S01 | M002/S02 | unmapped |
+| R106 | primary-user-loop | validated | M002/S01 | M002/S02 | merchant_credentials URL + 2 tests |
 | R011 | differentiator | deferred | none | none | unmapped |
 | R012 | constraint | out-of-scope | none | none | n/a |
 | R013 | constraint | out-of-scope | none | none | n/a |
@@ -269,7 +269,7 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Coverage Summary
 
-- Active requirements: 6
-- Mapped to slices: 6
-- Validated: 10
+- Active requirements: 2
+- Mapped to slices: 2
+- Validated: 14
 - Unmapped active requirements: 0

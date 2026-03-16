@@ -22,10 +22,11 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 - Toast notifications on both dashboards for completion transitions
 - Extension packaging (config.json, manifest.json, tile, README, LICENSE)
 
+**M002 (Merchant Activation Kit) is in planning.** Auto-provision TPoS terminals during onboarding, surface shareable payment links and QR codes on dashboards, generate printable merchant posters.
+
 **What's pending:**
 - Runtime UAT on a live LNbits instance (end-to-end payment flow, install from GitHub)
 - Replace placeholder tile image with branded artwork
-- Populate config.json `images` array with UI screenshots
 
 ## Architecture / Key Patterns
 
@@ -36,6 +37,7 @@ The payment rerouting engine — intercepting incoming payments and splitting th
 - Internal wallet-to-wallet transfers via `create_invoice` + `pay_invoice`
 - Merchant account creation via `create_user_account_no_ckeck` with `default_exts=["orangepiller"]`
 - Atomic SQL UPDATE with CASE for concurrent-safe debt capping
+- Cross-extension integration via internal HTTP calls (not direct imports) for soft dependencies
 - Pydantic v1 models, SQLAlchemy 1.4, async Python
 
 ## Capability Contract
@@ -45,3 +47,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 ## Milestone Sequence
 
 - [x] M001: Orange Piller Extension — Full extension from scaffold to installable package with onboarding, payment rerouting, dashboards, and arrangement management. All 10 requirements validated. 20 tests pass.
+- [ ] M002: Merchant Activation Kit — Auto-provision TPoS terminal during onboarding, shareable payment links with QR codes on dashboards, printable merchant poster for the counter.

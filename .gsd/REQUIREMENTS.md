@@ -4,7 +4,71 @@ This file is the explicit capability and coverage contract for the Orange Piller
 
 ## Active
 
-(No active requirements — all moved to Validated with M001 completion)
+### R101 — TPoS auto-provisioning during onboarding
+- Class: core-capability
+- Status: active
+- Description: When the orange piller creates an arrangement, a TPoS terminal is automatically created on the merchant's wallet via the TPoS extension API. The TPoS ID and shareable URL are stored on the arrangement.
+- Why it matters: Without a payment terminal, the merchant has no way to accept Bitcoin at their counter — the rerouting engine sits idle.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Uses internal HTTP call to TPoS API (`POST /tpos/api/v1/tposs`) with the merchant wallet's adminkey. TPoS must also be added to `default_exts` during account creation so it's enabled on the merchant's account.
+
+### R102 — Extended onboarding form with merchant/TPoS settings
+- Class: primary-user-loop
+- Status: active
+- Description: The onboarding form includes core TPoS configuration fields: merchant name, currency, tip options, tax default, tax inclusive toggle, and business info (name, address, VAT ID).
+- Why it matters: The orange piller needs to configure the merchant's payment terminal during onboarding — they can't do it later without the merchant's login.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02
+- Validation: unmapped
+- Notes: Power-user TPoS features (inventory, ATM/withdraw, Stripe, remote mode) are omitted — merchant can configure those later from their own TPoS admin.
+
+### R103 — Graceful degradation when TPoS not installed
+- Class: failure-visibility
+- Status: active
+- Description: If TPoS is not installed on the LNbits instance, onboarding still succeeds — the arrangement is created without a TPoS terminal. The orange piller sees a warning that no payment terminal was provisioned.
+- Why it matters: The extension shouldn't break if the LNbits admin hasn't installed TPoS.
+- Source: user
+- Primary owning slice: M002/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: TPoS URL fields on the arrangement will be null/empty. Dashboards should display an informative message instead of a broken link.
+
+### R104 — TPoS link and QR on dashboards
+- Class: primary-user-loop
+- Status: active
+- Description: Both orange piller and merchant dashboards display the TPoS shareable URL as a clickable link and a QR code. The link opens the TPoS payment page directly.
+- Why it matters: The orange piller needs to share the payment link with the merchant; the merchant needs quick access to their own payment terminal.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: none
+- Validation: unmapped
+- Notes: QR code generated client-side using a JS library already available in LNbits (or a lightweight one). Only shown when tpos_url is present.
+
+### R105 — Printable merchant poster with QR code
+- Class: primary-user-loop
+- Status: active
+- Description: A dedicated route serves a printable HTML page with the merchant's business name, "Pay with Bitcoin" branding, and a QR code pointing to the TPoS payment page. Designed for printing and placing at the merchant's counter.
+- Why it matters: The orange piller walks out of the shop with something physical to hand the merchant — a poster that makes Bitcoin payments possible without any merchant training.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Standalone page, no LNbits chrome. Print-optimized CSS. Accessible via a link from the dashboard.
+
+### R106 — Merchant login credentials surfaced to orange piller
+- Class: primary-user-loop
+- Status: active
+- Description: After onboarding, the orange piller receives the merchant's LNbits login URL (or credentials) so they can share access to the merchant's full LNbits dashboard.
+- Why it matters: The merchant needs a way to access their own LNbits account to see their arrangement, configure settings, and eventually manage their wallet independently.
+- Source: inferred
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02
+- Validation: unmapped
+- Notes: Need to determine what `create_user_account_no_ckeck` returns for authentication — may be a username/password, an auth token, or a direct login link. Surface whatever is available.
 
 ## Validated
 
@@ -166,6 +230,17 @@ This file is the explicit capability and coverage contract for the Orange Piller
 - Validation: n/a
 - Notes: User explicitly ruled this out.
 
+### R015 — Full TPoS configuration during onboarding
+- Class: constraint
+- Status: out-of-scope
+- Description: Exposing all ~20 TPoS settings (inventory, ATM/withdraw, Stripe, receipt printing, remote mode) in the onboarding form.
+- Why it matters: Prevents scope creep — power-user TPoS features are accessible via the merchant's own TPoS admin later.
+- Source: user
+- Primary owning slice: none
+- Supporting slices: none
+- Validation: n/a
+- Notes: Core settings (name, currency, tips, tax, business info) are in scope. Advanced features deferred to merchant self-service.
+
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
@@ -180,14 +255,21 @@ This file is the explicit capability and coverage contract for the Orange Piller
 | R008 | core-capability | validated | M001/S05 | M001/S02 | test_cutover.py |
 | R009 | launchability | validated | M001/S05 | M001/S01 | config.json + artifacts |
 | R010 | failure-visibility | validated | M001/S05 | none | toast notification code |
+| R101 | core-capability | active | M002/S01 | none | unmapped |
+| R102 | primary-user-loop | active | M002/S01 | M002/S02 | unmapped |
+| R103 | failure-visibility | active | M002/S01 | none | unmapped |
+| R104 | primary-user-loop | active | M002/S02 | none | unmapped |
+| R105 | primary-user-loop | active | M002/S02 | none | unmapped |
+| R106 | primary-user-loop | active | M002/S01 | M002/S02 | unmapped |
 | R011 | differentiator | deferred | none | none | unmapped |
 | R012 | constraint | out-of-scope | none | none | n/a |
 | R013 | constraint | out-of-scope | none | none | n/a |
 | R014 | anti-feature | out-of-scope | none | none | n/a |
+| R015 | constraint | out-of-scope | none | none | n/a |
 
 ## Coverage Summary
 
-- Active requirements: 0
-- Mapped to slices: 10
+- Active requirements: 6
+- Mapped to slices: 6
 - Validated: 10
 - Unmapped active requirements: 0

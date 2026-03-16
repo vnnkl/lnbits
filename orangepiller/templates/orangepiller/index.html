@@ -1,11 +1,113 @@
 {% extends "base.html" %}
 {% from "macros.jinja" import window_vars with context %}
+
+{% block page %}
+<div class="row q-col-gutter-md">
+  <div class="col-12 col-md-8 q-gutter-y-md">
+    <q-card class="q-pa-sm">
+      <q-card-section class="q-pa-none text-center">
+        <q-form class="q-gutter-md">
+          <q-select
+            filled
+            dense
+            :options="g.user.wallets"
+            v-model="selectedWallet"
+            label="Select Wallet:"
+            option-label="name"
+          ></q-select>
+        </q-form>
+      </q-card-section>
+    </q-card>
+
+    <q-card class="q-pa-sm">
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Arrangements</h5>
+          </div>
+        </div>
+
+        <q-table
+          flat
+          bordered
+          :rows="arrangements"
+          :columns="columns"
+          row-key="id"
+          :pagination="{ rowsPerPage: 10 }"
+          :loading="loading"
+        >
+          <template v-slot:body-cell-progress_percent="props">
+            <q-td :props="props">
+              <q-linear-progress
+                :value="props.row.progress_percent / 100"
+                color="green"
+                track-color="grey-3"
+                style="height: 20px; min-width: 100px"
+                rounded
+              >
+                <div class="absolute-full flex flex-center">
+                  <q-badge
+                    color="transparent"
+                    text-color="dark"
+                    :label="props.row.progress_percent + '%'"
+                  ></q-badge>
+                </div>
+              </q-linear-progress>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-status="props">
+            <q-td :props="props">
+              <q-chip
+                dense
+                :color="props.row.status === 'completed' ? 'green' : 'orange'"
+                text-color="white"
+                :label="props.row.status === 'completed' ? 'Completed' : 'Active'"
+              ></q-chip>
+            </q-td>
+          </template>
+
+          <template v-slot:no-data>
+            <div class="full-width row flex-center text-grey q-pa-lg">
+              <q-icon name="info" size="sm" class="q-mr-sm"></q-icon>
+              No arrangements yet. Create one via the API.
+            </div>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <div class="col-12 col-md-4 q-gutter-y-md">
+    <q-card>
+      <q-card-section>
+        <h6 class="text-subtitle1 q-my-none">
+          {{SITE_TITLE}} Orange Piller
+        </h6>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <p>
+          Onboard merchants to Bitcoin with managed LNbits accounts and
+          payback arrangements.
+        </p>
+        <p>
+          Each arrangement tracks a merchant's debt repayment. A percentage of
+          incoming payments to the merchant's wallet is automatically rerouted
+          back to you until the debt is fully repaid.
+        </p>
+        <p>
+          The <strong>Progress</strong> column shows how much of the total debt
+          has been repaid. When repayment is complete, the status changes to
+          <q-chip dense color="green" text-color="white" label="Completed" size="sm"></q-chip>.
+        </p>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+{% endblock %}
+
 {% block scripts %}
 {{ window_vars(user) }}
-{% endblock %}
-{% block page %}
-<div class="q-pa-md">
-  <h5>Orange Piller</h5>
-  <p>Onboard merchants to Bitcoin with managed LNbits accounts and payback arrangements.</p>
-</div>
+<script src="/orangepiller/static/js/index.js"></script>
 {% endblock %}
